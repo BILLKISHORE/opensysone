@@ -6,6 +6,7 @@ into a Jev answer (see answers.py). jevmlx field names are the question ids.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -181,8 +182,11 @@ def _check_compiles(schema_dict: dict[str, dict[str, Any]]) -> None:
 
     try:
         StructuredSchema(schema_dict)
-    except SchemaCompileError as e:
+    except (SchemaCompileError, ValueError) as e:
         field = getattr(e, "field", None)
+        if field is None:
+            match = re.search(r"Field '([^']+)'", str(e))
+            field = match.group(1) if match else None
         loc = ["body", "questions", field] if field else ["body", "questions"]
         raise SchemaError(loc, str(e)) from e
 

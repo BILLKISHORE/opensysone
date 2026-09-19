@@ -16,7 +16,8 @@ Described = Union[str, dict[str, Any], list[Any], None]
 
 QID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 MAX_QUESTIONS = 128
-MAX_OPTIONS = 1024
+MAX_OPTIONS = 255  # jevmlx and Jev both cap choice fields here
+MAX_MULTI_OPTIONS = 64  # jevmlx cap for multi fields
 MAX_SCORE_LEVELS = 10
 MAX_SAMPLES = 16
 MAX_BULK_ITEMS = 1000
@@ -64,7 +65,7 @@ class ScoreQuestion(BaseModel):
 class MultiQuestion(BaseModel):
     type: Literal["multi"]
     instructions: Described = None
-    criteria: dict[str, Described] = Field(min_length=2, max_length=MAX_OPTIONS)
+    criteria: dict[str, Described] = Field(min_length=2, max_length=MAX_MULTI_OPTIONS)
     constraints: list[dict[str, Any]] = Field(default_factory=list)
     policy: Policy | None = None
 
