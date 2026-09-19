@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+
+# vendored checkout used for development, installed as a dependency
+jevmlx/
+
+# weights, caches, run logs
+models/
+*.safetensors
+*.log
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
