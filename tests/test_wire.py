@@ -87,3 +87,12 @@ def test_error_helpers_shape():
     assert b'"error_type":"authentication_error"' in body or b'"error_type": "authentication_error"' in body
     v = validation_error(["body", "questions"], "bad")
     assert v.status_code == 422
+
+
+def test_option_caps_match_jevmlx():
+    too_many = {f"o{i}": "" for i in range(256)}
+    with pytest.raises(ValidationError):
+        _req(questions={"q": {"type": "choice", "criteria": too_many}})
+    with pytest.raises(ValidationError):
+        _req(questions={"q": {"type": "multi", "criteria": {f"o{i}": "" for i in range(65)}}})
+    assert _req(questions={"q": {"type": "choice", "criteria": {f"o{i}": "" for i in range(255)}}})
