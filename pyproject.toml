@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "jevmlx @ git+https://github.com/bnsd55/jevmlx@5449b648c892521036d68a60fa6e3fb81e755cac",
+    "jevmlx @ git+https://github.com/BILLKISHORE/jevmlx@45a85937f2a2017f23671d07f2846523c4e88230",
     "mlx-lm>=0.31.3",
     "fastapi>=0.115",
     "uvicorn>=0.30",
