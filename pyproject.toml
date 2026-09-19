@@ -20,10 +20,23 @@ classifiers = [
 dependencies = [
     "jevmlx @ git+https://github.com/bnsd55/jevmlx@5449b648c892521036d68a60fa6e3fb81e755cac",
     "mlx-lm>=0.31.3",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "httpx>=0.27", "typesafe-sdk>=0.7"]
 
 [project.urls]
 Repository = "https://github.com/BILLKISHORE/opensysone"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/opensysone"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = ["live: needs a loaded model on Apple Silicon"]
