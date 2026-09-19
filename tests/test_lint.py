@@ -52,3 +52,7 @@ def test_tokenizer_findings_are_prefixed(monkeypatch):
     f = lint_compiled(compile_request(req), tokenizer=object())
     assert [x.code for x in f] == ["token_collision"]
     assert "rename b" in f[0].message
+
+
+def test_short_distinct_labels_are_not_near_duplicates():
+    assert _lint({"pick": {"type": "choice", "instructions": "x", "criteria": {"a": "", "b": "", "yes": "", "no": ""}}}) == []
