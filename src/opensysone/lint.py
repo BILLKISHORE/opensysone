@@ -7,6 +7,7 @@ from typing import Any
 from .schema import CompiledRequest
 
 MANY_OPTIONS = 128
+NEAR_DUPLICATE_MIN_LEN = 4  # "a" vs "b" is a label choice, not a typo
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,8 @@ def lint_compiled(compiled: CompiledRequest, tokenizer: Any = None) -> list[Lint
         opts = list(plan.options)
         for i in range(len(opts)):
             for j in range(i + 1, len(opts)):
+                if min(len(opts[i]), len(opts[j])) < NEAR_DUPLICATE_MIN_LEN:
+                    continue
                 if _edit_distance_is_one(opts[i].lower(), opts[j].lower()):
                     findings.append(LintFinding(
                         qid, "near_duplicate", f"{opts[i]!r} and {opts[j]!r} differ by one character"))
