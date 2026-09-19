@@ -77,3 +77,56 @@ def test_empty_option_name_is_a_schema_error():
     with pytest.raises(SchemaError) as e:
         _compile({"team": {"type": "choice", "criteria": {"": "x", "b": "y"}}})
     assert e.value.loc == ["body", "questions", "team", "criteria"]
+
+
+def test_multi_compiles_with_set_constraints():
+    c = _compile({"tags": {"type": "multi", "instructions": "Which apply?",
+                           "criteria": {"x": "ex", "y": "why", "z": "zed"},
+                           "constraints": [{"type": "mutually_exclusive", "options": ["x", "y"]}]}})
+    spec = c.schema_dict["tags"]
+    assert spec["type"] == "multi"
+    assert spec["choices"] == ["x", "y", "z"]
+    assert spec["set_constraints"] == [{"type": "mutually_exclusive", "options": ["x", "y"]}]
+    assert c.plans["tags"].kind == "multi"
+
+
+def test_pairwise_compiles_to_two_option_enum():
+    c = _compile({"better": {"type": "pairwise", "a": "Answer one", "b": "Answer two"}})
+    spec = c.schema_dict["better"]
+    assert spec["choices"] == ["a", "b"]
+    assert spec["choice_descriptions"] == {"a": "Answer one", "b": "Answer two"}
+    assert spec["description"].startswith("Compare candidate a and candidate b")
+    assert c.plans["better"].kind == "pairwise"
+
+
+def test_abstain_adds_none_option_last():
+    c = _compile({"team": {"type": "choice", "criteria": {"a": "x", "b": "y"}, "abstain": True}})
+    assert c.schema_dict["team"]["choices"] == ["a", "b", NONE_OPTION]
+    assert c.plans["team"].abstain_option == NONE_OPTION
+
+
+def test_abstain_rejects_reserved_name():
+    with pytest.raises(SchemaError):
+        _compile({"team": {"type": "choice", "criteria": {NONE_OPTION: "x", "b": "y"}, "abstain": True}})
+
+
+def test_case_level_constraints_pass_through_when_valid():
+    c = _compile(
+        {"refund": {"type": "noul"}, "team": {"type": "choice", "criteria": {"billing": "b", "ops": "o"}}},
+        constraints=[{"type": "implies", "parent": "refund", "child": "team", "mapping": {"true": "billing"}}],
+    )
+    assert c.constraints[0]["type"] == "implies"
+
+
+def test_bad_constraint_type_is_schema_error():
+    with pytest.raises(SchemaError) as e:
+        _compile({"q": {"type": "noul"}}, constraints=[{"type": "sometimes"}])
+    assert e.value.loc[:2] == ["body", "constraints"]
+
+
+def test_contradictory_set_constraints_surface_as_schema_error():
+    with pytest.raises(SchemaError) as e:
+        _compile({"flags": {"type": "multi", "criteria": {"x": "", "y": ""},
+                            "constraints": [{"type": "mutually_exclusive", "options": ["x", "y"]},
+                                            {"type": "implies", "if_option": "x", "then_option": "y"}]}})
+    assert "flags" in e.value.msg or e.value.loc[2] == "flags"

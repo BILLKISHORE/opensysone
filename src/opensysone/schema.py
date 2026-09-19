@@ -129,11 +129,62 @@ def _score(qid: str, q: ScoreQuestion) -> tuple[dict[str, Any], QuestionPlan]:
     return spec, QuestionPlan(qid, "score", tuple(names), legend, None, q.policy)
 
 
+def _multi(qid: str, q: MultiQuestion) -> tuple[dict[str, Any], QuestionPlan]:
+    names = list(q.criteria)
+    spec: dict[str, Any] = {
+        "type": "multi",
+        "description": _instructions(qid, q),
+        "choices": names,
+        "choice_descriptions": _glosses(qid, q.criteria),
+    }
+    if q.constraints:
+        spec["set_constraints"] = [dict(c) for c in q.constraints]
+    return spec, QuestionPlan(qid, "multi", tuple(names), None, None, q.policy)
+
+
+def _pairwise(qid: str, q: PairwiseQuestion) -> tuple[dict[str, Any], QuestionPlan]:
+    desc = PAIRWISE_PREFIX
+    if q.instructions:
+        desc += " " + text_of(q.instructions)
+    spec = {
+        "type": "enum",
+        "description": desc,
+        "choices": ["a", "b"],
+        "choice_descriptions": {"a": text_of(q.a), "b": text_of(q.b)},
+    }
+    return spec, QuestionPlan(qid, "pairwise", ("a", "b"), None, None, q.policy)
+
+
 _COMPILERS: dict[type, Any] = {
     NoulQuestion: _noul,
     ChoiceQuestion: _choice,
     ScoreQuestion: _score,
+    MultiQuestion: _multi,
+    PairwiseQuestion: _pairwise,
 }
+
+
+def _validated_constraints(constraints: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not constraints:
+        return []
+    from jevmlx.constraints import ConstraintError, validate_constraints
+
+    try:
+        return [dict(c) for c in validate_constraints(list(constraints))]
+    except (ConstraintError, ValueError) as e:
+        raise SchemaError(["body", "constraints"], str(e)) from e
+
+
+def _check_compiles(schema_dict: dict[str, dict[str, Any]]) -> None:
+    """jevmlx validates set constraints and field shapes at construction."""
+    from jevmlx.schema import SchemaCompileError, StructuredSchema
+
+    try:
+        StructuredSchema(schema_dict)
+    except SchemaCompileError as e:
+        field = getattr(e, "field", None)
+        loc = ["body", "questions", field] if field else ["body", "questions"]
+        raise SchemaError(loc, str(e)) from e
 
 
 def compile_request(req: SystemOneRequest) -> CompiledRequest:
@@ -146,4 +197,6 @@ def compile_request(req: SystemOneRequest) -> CompiledRequest:
         spec, plan = compiler(qid, q)
         schema_dict[qid] = spec
         plans[qid] = plan
-    return CompiledRequest(render_state(req.state), schema_dict, plans, list(req.constraints or []))
+    _check_compiles(schema_dict)
+    constraints = _validated_constraints(req.constraints)
+    return CompiledRequest(render_state(req.state), schema_dict, plans, constraints)
