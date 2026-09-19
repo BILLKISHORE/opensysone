@@ -1,0 +1,73 @@
+{
+  "model": "mlx-community/Qwen3.8-27B-4bit",
+  "stamp": {
+    "backbone": "mlx-community/Qwen3.8-27B-4bit",
+    "backbone_revision": "10c35caafbb80f7dc6a7a432cdd11af10a6d4818",
+    "quantization": {
+      "group_size": 64,
+      "bits": 4,
+      "mode": "affine"
+    },
+    "calibration": null,
+    "prompt_version": "jevmlx-parallel-v8",
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "opensysone": "0.0.1"
+  },
+  "parity": {
+    "winners_identical": false,
+    "max_abs_drift_nats": 0.23464967067154952,
+    "per_case": {
+      "code_security": {
+        "max_abs_drift_nats": 0.16873043271243304
+      },
+      "fintech_fraud": {
+        "max_abs_drift_nats": 0.120439727296346
+      },
+      "high_cardinality_255": {
+        "max_abs_drift_nats": 0.23464967067154952
+      },
+      "support_triage": {
+        "max_abs_drift_nats": 0.12271100667234736
+      }
+    }
+  },
+  "rows": [
+    {
+      "options": 16,
+      "wall_ms": 3577.3,
+      "chose_billing": true,
+      "p_billing": 0.978,
+      "input_tokens": 456,
+      "peak_memory_gb": 16.33,
+      "max_rows": 1
+    },
+    {
+      "options": 64,
+      "wall_ms": 6785.9,
+      "chose_billing": true,
+      "p_billing": 0.9261,
+      "input_tokens": 1381,
+      "peak_memory_gb": 17.49,
+      "max_rows": 1
+    },
+    {
+      "options": 128,
+      "wall_ms": 16405.0,
+      "chose_billing": true,
+      "p_billing": 0.9414,
+      "input_tokens": 2645,
+      "peak_memory_gb": 18.97,
+      "max_rows": 1
+    },
+    {
+      "options": 255,
+      "wall_ms": 47287.2,
+      "chose_billing": true,
+      "p_billing": 0.9651,
+      "input_tokens": 5235,
+      "peak_memory_gb": 21.75,
+      "max_rows": 1
+    }
+  ]
+}
