@@ -42,6 +42,9 @@ class FakeRuns:
         for name in names:
             if _type_of(schema, name) == "boolean":
                 tele[name] = {"value": True, "probability": 0.9}
+            elif _type_of(schema, name) == "multi":
+                tele[name] = {"value": [], "probability": None,
+                              "per_option": {c: 0.4 for c in _choices_of(schema, name)}}
             else:
                 choices = _choices_of(schema, name)
                 n = len(choices)
@@ -153,3 +156,42 @@ def test_lint_warnings_are_returned_when_not_strict(engine):
 def test_bulk_runs_each_item(engine):
     outs = engine.decide_bulk([_req(), _req(state="Other state")])
     assert len(outs) == 2 and outs[0]["cached"] is False and outs[1]["cached"] is False
+
+
+class Sharpen:
+    sha = "cafe"
+
+    def apply(self, kind, probs, prompt_tokens):
+        sq = [p * p for p in probs]
+        return [x / sum(sq) for x in sq]
+
+
+def test_raw_distributions_are_exposed_before_calibration(engine):
+    out = engine.decide(_req())
+    raw = out[engine_mod.RAW_KEY]
+    assert raw["prompt_tokens"] == 42
+    team = raw["questions"]["team"]
+    assert team["kind"] == "choice" and team["options"] == ["outage", "billing"]
+    assert team["probs"][0] == pytest.approx(0.7) and team["source"] == "model"
+
+
+def test_calibrator_changes_confidence_not_winner_and_stamp(engine):
+    before = engine.decide(_req(cache=False))["answers"]["team"]["probabilities"]["outage"]
+    engine.set_calibrator(Sharpen())
+    out = engine.decide(_req())
+    assert out["stamp"]["calibration"] == "cafe"
+    assert out["answers"]["team"]["choice"] == "outage"
+    assert out["answers"]["team"]["probabilities"]["outage"] > before
+    assert out[engine_mod.RAW_KEY]["questions"]["team"]["probs"][0] == pytest.approx(0.7)
+
+
+def test_rules_and_multi_are_not_calibrated(engine):
+    engine.set_calibrator(Sharpen())
+    req = SystemOneRequest.model_validate({
+        "state": "REFUND now", "cache": False,
+        "questions": {"refund": {"type": "noul", "instructions": "refund?"},
+                      "tags": {"type": "multi", "instructions": "tags?", "criteria": {"x": "", "y": ""}}},
+        "rules": [{"question": "refund", "pattern": "refund", "answer": True}]})
+    out = engine.decide(req)
+    assert out["answers"]["refund"]["noul"] == 1.0
+    assert out[engine_mod.RAW_KEY]["questions"]["refund"]["source"] == "rule"

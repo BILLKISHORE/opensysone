@@ -52,6 +52,7 @@ def cmd_decide(args) -> int:
     except SchemaError as e:
         print(json.dumps({"error": e.msg, "loc": e.loc}), file=sys.stderr)
         return 2
+    out = {k: v for k, v in out.items() if k != "_raw"}
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0
 

@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from . import __version__
+from .calib.records import CALIBRATED_KINDS
 from .answers import average_distributions, distribution_from_telemetry, permute_choices, shape_answer
 from .cache import DecisionCache, cache_key
 from .lint import LintFinding, lint_compiled
@@ -17,6 +18,7 @@ from .wire import SystemOneRequest
 MODEL_VERSION = f"opensysone-{__version__}"
 MODEL_ALIASES = frozenset({"opensysone-latest", MODEL_VERSION, "jev-latest", "jev-preview"})
 _TIMING_KEYS = ("prefill_ms", "suffix_eval_ms", "elapsed_ms", "passes")
+RAW_KEY = "_raw"  # pre-calibration distributions; stripped by the server and CLI
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +56,14 @@ class Engine:
         parity_check: bool = True,
         max_rows: int | None = None,
         cache: DecisionCache | None = None,
+        calibrator: Any = None,
     ):
         self.model_id = model_id
         self.scoring = scoring
         self.parity_check = parity_check
         self.max_rows = max_rows
         self.cache = cache
+        self.calibrator = calibrator
         self.parity: dict[str, Any] | None = None
         self.stamp: dict[str, Any] = {}
         self.ready = False
@@ -68,7 +72,7 @@ class Engine:
 
     def load(self) -> None:
         self._model, self._tokenizer = _load(self.model_id)
-        self.stamp = build_stamp(self.model_id, None)
+        self.stamp = build_stamp(self.model_id, getattr(self.calibrator, "sha", None))
         if self.parity_check and self.max_rows is None:
             self.parity = _parity(self._model, self._tokenizer)
             if not self.parity.get("passed", False):
@@ -78,6 +82,11 @@ class Engine:
                     self.parity.get("max_abs_drift_nats", float("nan")),
                 )
         self.ready = True
+
+    def set_calibrator(self, calibrator: Any) -> None:
+        """Swap calibration. The stamp changes, so the cache never serves the old calibration."""
+        self.calibrator = calibrator
+        self.stamp = {**self.stamp, "calibration": getattr(calibrator, "sha", None)}
 
     def lint(self, req: SystemOneRequest) -> list[LintFinding]:
         return lint_compiled(compile_request(req), self._tokenizer)
@@ -132,6 +141,15 @@ class Engine:
             for q in pending:
                 if q not in ruled:
                     dists[q] = average_distributions([ps[q] for ps in per_sample])
+        raw = {
+            qid: {"kind": plan.kind, "options": list(plan.options), "probs": list(dists[qid]),
+                  "source": "rule" if qid in ruled else "model"}
+            for qid, plan in compiled.plans.items()
+        }
+        if self.calibrator is not None:
+            for qid, plan in compiled.plans.items():
+                if qid not in ruled and plan.kind in CALIBRATED_KINDS:
+                    dists[qid] = self.calibrator.apply(plan.kind, dists[qid], input_tokens)
         answers: dict[str, Any] = {}
         for qid, plan in compiled.plans.items():
             ans = shape_answer(plan, dists[qid])
@@ -152,6 +170,7 @@ class Engine:
                 "samples": req.samples,
                 "max_rows": self.max_rows,
             },
+            RAW_KEY: {"prompt_tokens": input_tokens, "questions": raw},
         }
         if req.cache and self.cache is not None:
             self.cache.put(key, response)
