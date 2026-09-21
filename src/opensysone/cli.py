@@ -14,6 +14,7 @@ from .calib.collect import collect as run_collect
 from .calib.data import TD_REVISION, typed_decisions_cases
 from .calib.fit import fit_calibrator
 from .calib.records import load_decisions, read_jsonl
+from .calib.store import OutcomeStore
 from .calib.report import evaluate, render_report
 from .engine import Engine
 from .lint import lint_compiled
@@ -52,7 +53,9 @@ def cmd_serve(args) -> int:
     engine = Engine(args.model, parity_check=not args.no_parity_check, cache=cache,
                     calibrator=_calibrator(args.calibration))
     engine.load()
-    app = create_app(engine, api_key=args.api_key, max_queue=args.max_queue)
+    store = OutcomeStore(args.outcomes, feedback_out=args.feedback_out) if args.outcomes else None
+    app = create_app(engine, api_key=args.api_key, max_queue=args.max_queue,
+                     store=store, calibration_dir=args.calibration)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
 
@@ -174,6 +177,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--max-queue", type=int, default=64)
     s.add_argument("--no-parity-check", action="store_true")
     s.add_argument("--calibration", default=None, help="calibration directory from `opensysone fit`")
+    s.add_argument("--outcomes", default=None, help="SQLite file for decisions and feedback (enables audit/queue)")
+    s.add_argument("--feedback-out", default=None, help="append labeled feedback as decision JSONL for `fit`")
     s.set_defaults(func=cmd_serve)
 
     d = sub.add_parser("decide", help="decide one state from the terminal")
