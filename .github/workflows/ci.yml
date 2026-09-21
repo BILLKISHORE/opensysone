@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: |
+          uv venv --python 3.13 .venv
+          uv pip install --python .venv/bin/python -e '.[test]'
+      - name: Tests
+        run: .venv/bin/pytest -q
+      - name: Calibration gate
+        run: >
+          .venv/bin/opensysone test benchmarks/results/calibration/decisions-test.jsonl
+          --calibration benchmarks/results/calibration/calib
+          --gate benchmarks/results/calibration/gate.json
