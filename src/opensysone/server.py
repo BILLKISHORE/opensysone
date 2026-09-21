@@ -10,12 +10,18 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .engine import MODEL_ALIASES, MODEL_VERSION
+from .engine import MODEL_ALIASES, MODEL_VERSION, RAW_KEY
 from .schema import SchemaError
 from .wire import BulkRequest, SystemOneRequest, error_response, validation_error
 
 RELEASE_DATE = "2026-09-19"
 logger = logging.getLogger(__name__)
+
+
+def _public(out: Any) -> Any:
+    if isinstance(out, dict) and RAW_KEY in out:
+        out = {k: v for k, v in out.items() if k != RAW_KEY}
+    return out
 
 
 def create_app(engine: Any, *, api_key: str | None = None, max_queue: int = 64) -> FastAPI:
@@ -80,7 +86,7 @@ def create_app(engine: Any, *, api_key: str | None = None, max_queue: int = 64) 
             return error_response(
                 404, "not_found_error", f"Model {req.model!r} not found. Available: opensysone-latest.")
         try:
-            return await run_serial(engine.decide, req)
+            return _public(await run_serial(engine.decide, req))
         except SchemaError as e:
             return validation_error(e.loc, e.msg)
 
@@ -92,6 +98,6 @@ def create_app(engine: Any, *, api_key: str | None = None, max_queue: int = 64) 
             return validation_error(e.loc, e.msg)
         if isinstance(out, JSONResponse):
             return out
-        return {"items": out}
+        return {"items": [_public(o) for o in out]}
 
     return app

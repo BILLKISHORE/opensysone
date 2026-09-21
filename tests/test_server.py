@@ -87,3 +87,17 @@ def test_queue_full_is_529():
     r = c.post("/v1/systemone", json=BODY)
     assert r.status_code == 529
     assert r.headers["retry-after"] == "1"
+
+
+def test_raw_key_never_leaves_the_server():
+    class RawEngine(FakeEngine):
+        def decide(self, req):
+            out = super().decide(req)
+            out["_raw"] = {"prompt_tokens": 3, "questions": {}}
+            return out
+
+    c = TestClient(create_app(RawEngine()))
+    body = c.post("/v1/systemone", json=BODY).json()
+    assert "_raw" not in body
+    bulk = c.post("/v1/bulk", json={"items": [BODY]}).json()
+    assert "_raw" not in bulk["items"][0]
