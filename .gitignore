@@ -21,3 +21,6 @@ models/
 .DS_Store
 .idea/
 .vscode/
+
+# local datasets
+data/
