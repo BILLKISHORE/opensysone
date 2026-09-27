@@ -42,3 +42,23 @@ def test_calibrator_applies_chosen_method():
     cal = result.calibrator
     out = cal.apply("choice", [0.95, 0.035, 0.015], 120)
     assert out[0] < 0.95 and out.index(max(out)) == 0
+
+
+def test_already_calibrated_kind_keeps_raw_probabilities():
+    """A backbone that is already calibrated must not be 'fixed': identity wins."""
+    rng = random.Random(7)
+    recs = []
+    for i in range(600):
+        top = rng.choice([0.55, 0.7, 0.9])
+        label = "a" if rng.random() < top else "b"  # accuracy matches confidence
+        recs.append(DecisionRecord(f"cal-{i}", f"cal-{i}", "choice", ("a", "b"), (top, 1 - top),
+                                   120, label, None))
+    s = fit_calibrator(recs).summary["choice"]
+    assert s["chosen"] == "identity"
+    assert s["after"]["ece"] == s["before"]["ece"]
+
+
+def test_selection_never_raises_heldout_ece():
+    for seed, top, acc in ((1, 0.95, 0.6), (2, 0.6, 0.85), (3, 0.8, 0.8)):
+        s = fit_calibrator(_records(600, top=top, acc=acc, seed=seed)).summary["choice"]
+        assert s["after"]["ece"] <= s["before"]["ece"] + 1e-9, (seed, s["chosen"])
