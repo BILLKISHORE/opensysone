@@ -12,6 +12,7 @@ from .records import DecisionRecord, is_heldout
 
 MIN_ADAPTIVE = 50
 PREFERENCE = ("identity", "temperature", "adaptive")  # simpler wins a tie
+MIN_ECE_GAIN = 0.005  # a method must beat raw probabilities by this much to be used
 
 
 @dataclass(frozen=True)
@@ -64,11 +65,19 @@ def fit_calibrator(records: list[DecisionRecord], *, meta: dict[str, Any] | None
                 for r in held
             ]
         nlls = {m: _mean_nll(held, p) for m, p in candidates.items()}
-        chosen = min(nlls, key=lambda m: (round(nlls[m], 6), PREFERENCE.index(m)))
+        # Selection is on held-out calibration error, the number the report
+        # leads with. A candidate must beat raw probabilities by MIN_ECE_GAIN
+        # or the kind keeps them: on a backbone that is already calibrated,
+        # the honest answer is to change nothing.
+        eces = {m: summarize(held, p)["ece"] for m, p in candidates.items()}
+        ranked = min(eces, key=lambda m: (round(eces[m], 4), PREFERENCE.index(m)))
+        chosen = ranked if eces[ranked] <= eces["identity"] - MIN_ECE_GAIN else "identity"
         before, after = summarize(held, raw), summarize(held, candidates[chosen])
         kinds[kind] = KindCalibration(chosen, t if chosen == "temperature" else 1.0,
-                                      {"heldout_nll": nlls, "ece_before": before["ece"], "ece_after": after["ece"]})
-        summary[kind] = {"n_train": len(train), "n_heldout": len(held), "heldout_nll": nlls, "chosen": chosen,
-                         "temperature": t, "before": before, "after": after}
+                                      {"heldout_nll": nlls, "heldout_ece": eces,
+                                       "ece_before": before["ece"], "ece_after": after["ece"]})
+        summary[kind] = {"n_train": len(train), "n_heldout": len(held), "heldout_nll": nlls,
+                         "heldout_ece": eces, "chosen": chosen, "temperature": t,
+                         "before": before, "after": after}
     uses_head = any(k.method == "adaptive" for k in kinds.values())
     return FitResult(Calibrator(kinds, head=head if uses_head else None, meta=meta), summary)
