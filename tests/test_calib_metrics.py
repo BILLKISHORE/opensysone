@@ -2,7 +2,8 @@ import math
 
 import pytest
 
-from opensysone.calib.metrics import brier, ece, reliability, soft_nll, summarize, tvd
+from opensysone.calib.metrics import (bootstrap_ci, brier, ece, ece_equal_mass, ece_sweep, option_ece, reliability,
+                                      soft_nll, summarize, tvd)
 from opensysone.calib.records import DecisionRecord
 
 
@@ -47,3 +48,34 @@ def test_summarize_uses_top_prob_and_optional_tvd():
 
 def test_summarize_empty():
     assert summarize([], [])["n"] == 0
+
+
+def test_equal_mass_ece_splits_by_count_not_width():
+    assert ece_equal_mass([0.1, 0.2, 0.3, 0.4], [False, False, True, True], bins=2) == pytest.approx(0.4)
+    assert ece_equal_mass([0.8] * 10, [True] * 8 + [False] * 2, bins=15) == pytest.approx(0.0)
+    assert ece_equal_mass([], []) == 0.0
+
+
+def test_sweep_ece_uses_most_bins_that_keep_accuracy_monotone():
+    assert ece_sweep([0.1, 0.2, 0.3, 0.4], [False, False, True, True]) == pytest.approx(0.4)
+    assert ece_sweep([0.1, 0.2, 0.3, 0.4], [True, False, False, True]) == pytest.approx(0.25)
+
+
+def test_option_ece_scores_every_option_not_only_the_top():
+    assert option_ece([[1.0, 0.0]], [0]) == pytest.approx(0.0)
+    assert option_ece([[0.5, 0.5], [0.5, 0.5]], [0, 0]) == pytest.approx(0.0)
+    assert option_ece([[0.9, 0.1]], [1]) > 0.5
+
+
+def test_bootstrap_ci_resamples_whole_groups():
+    values = [1.0, 1.0, 0.0, 0.0]
+    lo, hi = bootstrap_ci(["a", "a", "b", "b"], lambda idx: sum(values[i] for i in idx) / len(idx), n=200)
+    assert 0.0 <= lo <= 0.5 <= hi <= 1.0
+    same = bootstrap_ci(["a", "a"], lambda idx: 0.3, n=50)
+    assert same == (0.3, 0.3)
+
+
+def test_summarize_reports_robust_calibration_errors():
+    recs = [_rec([0.9, 0.1], 0), _rec([0.6, 0.4], 1)]
+    s = summarize(recs, [r.probs for r in recs])
+    assert {"ece_em15", "ece_sweep", "option_ece"} <= s.keys()
