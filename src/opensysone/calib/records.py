@@ -27,6 +27,7 @@ class DecisionRecord:
     prompt_tokens: int
     label: str
     label_distribution: tuple[float, ...] | None
+    signature: str = ""  # question_signature(): the same question asked again gets the same id
 
     @property
     def label_index(self) -> int:
@@ -36,6 +37,14 @@ class DecisionRecord:
         if self.label_distribution is not None:
             return list(self.label_distribution)
         return [1.0 if i == self.label_index else 0.0 for i in range(len(self.options))]
+
+
+def question_signature(kind: str, instructions: Any, options: Iterable[str]) -> str:
+    """A short stable id for one question: its type, its instructions and its options in prompt order."""
+    text = instructions if isinstance(instructions, str) or instructions is None else \
+        json.dumps(instructions, ensure_ascii=False, sort_keys=True)
+    body = json.dumps([kind, text or "", list(options)], ensure_ascii=False)
+    return hashlib.sha1(body.encode("utf-8")).hexdigest()[:12]
 
 
 def normalize_label(value: Any) -> str:
@@ -126,6 +135,7 @@ def parse_decision(line: dict[str, Any]) -> DecisionRecord:
         prompt_tokens=int(answer.get("prompt_tokens", 0)),
         label=label,
         label_distribution=aligned,
+        signature=question_signature(str(answer["kind"]), (line.get("question") or {}).get("instructions"), options),
     )
 
 
