@@ -29,7 +29,7 @@ def evaluate(records: Sequence[DecisionRecord], calibrator: Any = None) -> dict[
     all_raw, all_cal = [], []
     for kind, recs in sorted(by_kind.items()):
         raw = [list(r.probs) for r in recs]
-        cal = [calibrator.apply(kind, r.probs, r.prompt_tokens) if calibrator else list(r.probs) for r in recs]
+        cal = [calibrator.apply(kind, r.probs, r.prompt_tokens, signature=r.signature) if calibrator else list(r.probs) for r in recs]
         out[kind] = {"raw": summarize(recs, raw), "calibrated": summarize(recs, cal)}
         all_raw += raw
         all_cal += cal
