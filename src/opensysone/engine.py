@@ -7,7 +7,8 @@ from typing import Any
 
 from . import __version__
 from .calib.records import CALIBRATED_KINDS, question_signature
-from .answers import average_distributions, distribution_from_telemetry, permute_choices, shape_answer
+from .answers import (REORDERED_KINDS, average_distributions, distribution_from_telemetry, permute_choices,
+                      shape_answer)
 from .cache import DecisionCache, cache_key
 from .lint import LintFinding, lint_compiled
 from .rules import apply_rules
@@ -154,7 +155,13 @@ class Engine:
             seed = int(key[:8], 16)
             per_sample: list[dict[str, list[float]]] = []
             for s in range(req.samples):
-                permuted = {q: permute_choices(spec, seed, s) for q, spec in pending.items()}
+                # Later samples only rerun questions whose order changes; the rest would repeat sample 0.
+                # Constraints can tie fields together, so then every field runs every time.
+                active = {q: spec for q, spec in pending.items()
+                          if s == 0 or compiled.constraints or compiled.plans[q].kind in REORDERED_KINDS}
+                if not active:
+                    break
+                permuted = {q: permute_choices(spec, seed, s, compiled.plans[q].kind) for q, spec in active.items()}
                 result = _run_generation(
                     self._model, self._tokenizer, compiled.context, _structured(permuted),
                     max_rows=self.max_rows, scoring=self.scoring,
@@ -165,11 +172,11 @@ class Engine:
                 timing = {k: result.get(k) for k in _TIMING_KEYS}
                 per_sample.append({
                     q: distribution_from_telemetry(compiled.plans[q], result["field_telemetry"][q])
-                    for q in pending if q not in ruled
+                    for q in active if q not in ruled
                 })
             for q in pending:
                 if q not in ruled:
-                    dists[q] = average_distributions([ps[q] for ps in per_sample])
+                    dists[q] = average_distributions([ps[q] for ps in per_sample if q in ps])
         raw = {
             qid: {"kind": plan.kind, "options": list(plan.options), "probs": list(dists[qid]),
                   "source": "rule" if qid in ruled else "model"}

@@ -246,3 +246,33 @@ def test_calibrator_gets_the_same_signature_the_training_records_have(engine):
                                        options=raw["options"], probs=raw["probs"], prompt_tokens=1, label="outage",
                                        label_distribution=None, source="t", stamp={}))
     assert cal.signatures == [rec.signature] and rec.signature
+
+
+def test_cyclic_rotation_cancels_position_bias_for_choice():
+    from opensysone.answers import permute_choices
+
+    spec = {"type": "enum", "description": "d", "choices": ["a", "b", "c"]}
+    orders = [permute_choices(spec, 7, s, kind="choice")["choices"] for s in range(3)]
+    assert orders == [["a", "b", "c"], ["b", "c", "a"], ["c", "a", "b"]]
+
+
+def test_score_and_noul_are_never_reordered():
+    from opensysone.answers import permute_choices
+
+    score = {"type": "enum", "description": "d", "choices": ["0", "1", "2"]}
+    assert permute_choices(score, 7, 2, kind="score") == score
+    noul = {"type": "boolean", "description": "d"}
+    assert permute_choices(noul, 7, 1, kind="noul") == noul
+
+
+def test_repeat_samples_rerun_only_reordered_questions(engine):
+    out = engine.decide(_req(samples=2, cache=False))
+    first, second = (sorted(_names(c["schema"])) for c in engine._runs.calls)
+    assert first == ["team", "tone", "urgent"]
+    assert second == ["team"]
+    assert out["answers"]["team"]["probabilities"]["outage"] == pytest.approx(0.5)
+    assert out["answers"]["urgent"]["noul"] == pytest.approx(0.9)
+
+
+def _names(schema):
+    return list(schema.fields) if hasattr(schema, "fields") else list(schema)

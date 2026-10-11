@@ -111,13 +111,24 @@ def average_distributions(dists: Sequence[Sequence[float]]) -> list[float]:
     return [sum(d[i] for d in dists) / n for i in range(width)]
 
 
-def permute_choices(spec: dict[str, Any], seed: int, sample_index: int) -> dict[str, Any]:
-    """Seeded shuffle of an enum or multi field's prompt order. Sample 0 keeps the caller's order."""
-    if sample_index == 0 or spec.get("type") == "boolean":
+REORDERED_KINDS = frozenset({"choice", "multi"})  # option order is arbitrary; score levels and yes/no are not
+
+
+def permute_choices(spec: dict[str, Any], seed: int, sample_index: int, kind: str = "choice") -> dict[str, Any]:
+    """Prompt order for one sample. Sample 0 keeps the caller's order.
+
+    choice: cyclic rotation, so k samples put every option in every position once and a position
+    preference cancels in the average (Zheng et al. 2024). multi: seeded shuffle. score and noul
+    keep their order: an ordinal scale or a yes/no has a meaningful order.
+    """
+    if sample_index == 0 or kind not in REORDERED_KINDS or spec.get("type") == "boolean":
         return spec
-    rng = random.Random(f"{seed}:{spec.get('description', '')}:{sample_index}")
     choices = list(spec["choices"])
-    rng.shuffle(choices)
+    if kind == "choice":
+        shift = sample_index % len(choices)
+        choices = choices[shift:] + choices[:shift]
+    else:
+        random.Random(f"{seed}:{spec.get('description', '')}:{sample_index}").shuffle(choices)
     out = dict(spec)
     out["choices"] = choices
     return out
