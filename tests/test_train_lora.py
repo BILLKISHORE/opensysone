@@ -5,6 +5,15 @@ from opensysone.train.examples import CaseExample, FieldExample
 from opensysone.train.lora import LoraConfig, attach_lora, case_loss, load_adapter, mean_loss, save_adapter, train
 
 
+@pytest.fixture(autouse=True)
+def _cpu():
+    """The tiny model's head sizes have no fused Metal kernel; on CPU every mode uses the plain ops path."""
+    device = mx.default_device()
+    mx.set_default_device(mx.cpu)
+    yield
+    mx.set_default_device(device)
+
+
 def _tiny():
     from mlx_lm.models import qwen3_5 as q
 
@@ -165,3 +174,22 @@ def test_hard_and_soft_targets():
     assert _target(dist, "a", "hard") == {"a": 1.0}
     assert _target(dist, "a", "soft") == {"a": 0.6, "b": 0.4}
     assert _target(None, True, "soft") == {"true": 1.0}
+
+
+def test_train_steps_run_in_training_mode_and_leave_eval_mode(monkeypatch):
+    import opensysone.train.lora as lora_mod
+
+    model = _tiny()
+    cfg = LoraConfig(layers=2, rank=4, lr=1e-3, epochs=1, warmup=1, eval_every=2)
+    attach_lora(model, cfg)
+    modes = []
+    real = lora_mod.rows_loss
+
+    def spy(m, ex, cache):
+        modes.append(m.training)
+        return real(m, ex, cache)
+
+    monkeypatch.setattr(lora_mod, "rows_loss", spy)
+    train(model, [_case(i, True) for i in range(4)], [_case(9, True)], cfg, log=lambda s: None)
+    assert True in modes and False in modes  # training steps in train mode, validation in eval mode
+    assert model.training is False
