@@ -179,6 +179,30 @@ def cmd_report(args) -> int:
     return 0
 
 
+def cmd_crossfit(args) -> int:
+    from .calib.crossfit import crossfit
+
+    records = load_decisions(args.decisions)
+    probs, _ = crossfit(records, folds=args.folds, target=args.target)
+    ev = evaluate(records, probs=probs)
+    note = (f"{CONSENSUS_NOTE} Calibrated columns are cross-fitted: {args.folds} folds by case, each decision "
+            f"calibrated by a fit that never saw its case (target {args.target}).")
+    md, files = render_report(ev, title=args.title, note=note)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "report.md").write_text(md)
+    for name, svg in files.items():
+        (out / name).write_text(svg)
+    (out / "metrics.json").write_text(json.dumps(ev, indent=2, sort_keys=True) + "\n")
+    a = ev["all"]
+    for side in ("raw", "calibrated"):
+        m, ci = a[side], a[f"ci_{side}"]
+        print(f"{side:10s} acc {m['accuracy']:.4f} ece {m['ece']:.4f} [{ci['ece'][0]:.4f}-{ci['ece'][1]:.4f}] "
+              f"nll {m['nll']:.4f}")
+    print(f"report written to {out / 'report.md'}")
+    return 0
+
+
 def cmd_test(args) -> int:
     min_acc, max_ece = args.min_accuracy, args.max_ece
     if args.gate:
@@ -285,6 +309,14 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--calibration", default=None)
     r.add_argument("--title", default="Calibration report")
     r.set_defaults(func=cmd_report)
+
+    x = sub.add_parser("crossfit", help="cross-fitted calibration report: no separate training set needed")
+    x.add_argument("decisions", nargs="+")
+    x.add_argument("--out", required=True)
+    x.add_argument("--folds", type=int, default=5)
+    x.add_argument("--target", choices=["hard", "soft"], default="hard")
+    x.add_argument("--title", default="Cross-fitted calibration report")
+    x.set_defaults(func=cmd_crossfit)
 
     t = sub.add_parser("test", help="fail when accuracy or calibration regresses")
     t.add_argument("decisions", nargs="+")
