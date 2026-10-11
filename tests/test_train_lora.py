@@ -61,3 +61,32 @@ def test_adapter_roundtrip_gives_identical_scores(tmp_path):
     fresh = _tiny()
     assert load_adapter(fresh, tmp_path) == sha
     assert float(case_loss(fresh, data[0]).item()) == pytest.approx(float(case_loss(model, data[0]).item()), rel=1e-5)
+
+
+def test_engine_loads_an_adapter_and_stamps_its_sha(tmp_path, monkeypatch):
+    from opensysone import engine as engine_mod
+
+    trained = _tiny()
+    cfg = LoraConfig(layers=2, rank=4, scale=10.0, lr=5e-3, epochs=1, warmup=1, eval_every=5)
+    attach_lora(trained, cfg)
+    train(trained, [_case(0, True), _case(1, True)], [_case(2, True)], cfg, log=lambda s: None)
+    sha = save_adapter(trained, tmp_path, cfg)
+
+    served = _tiny()
+    monkeypatch.setattr(engine_mod, "_load", lambda model_id: (served, None))
+    monkeypatch.setattr(engine_mod, "build_stamp", lambda m, c: {"backbone": m})
+    e = engine_mod.Engine("tiny", parity_check=False, adapter=str(tmp_path))
+    e.load()
+    assert e.stamp["adapter"] == sha
+    assert float(case_loss(e._model, _case(0, True)).item()) == pytest.approx(
+        float(case_loss(trained, _case(0, True)).item()), rel=1e-5)
+
+
+def test_engine_without_adapter_stamps_none(monkeypatch):
+    from opensysone import engine as engine_mod
+
+    monkeypatch.setattr(engine_mod, "_load", lambda model_id: (object(), None))
+    monkeypatch.setattr(engine_mod, "build_stamp", lambda m, c: {})
+    e = engine_mod.Engine("x", parity_check=False)
+    e.load()
+    assert e.stamp["adapter"] is None

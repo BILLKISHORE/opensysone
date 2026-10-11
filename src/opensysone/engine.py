@@ -86,8 +86,10 @@ class Engine:
         max_rows: int | None = None,
         cache: DecisionCache | None = None,
         calibrator: Any = None,
+        adapter: str | None = None,
     ):
         self.model_id = model_id
+        self.adapter = adapter
         self.scoring = scoring
         self.parity_check = parity_check
         self.max_rows = max_rows
@@ -101,8 +103,13 @@ class Engine:
 
     def load(self) -> None:
         self._model, self._tokenizer = _load(self.model_id)
+        adapter_sha = None
+        if self.adapter:
+            from .train.lora import load_adapter
+
+            adapter_sha = load_adapter(self._model, self.adapter)
         self.stamp = {**build_stamp(self.model_id, getattr(self.calibrator, "sha", None)),
-                      "head": float32_head(self._model)}
+                      "head": float32_head(self._model), "adapter": adapter_sha}
         if self.parity_check and self.max_rows is None:
             self.parity = _parity(self._model, self._tokenizer)
             if not self.parity.get("passed", False):
