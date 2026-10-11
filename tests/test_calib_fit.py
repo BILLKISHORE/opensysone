@@ -108,3 +108,20 @@ def test_dirichlet_fixes_a_per_question_bias_and_can_raise_accuracy():
     cal = result.calibrator
     assert cal.apply("choice", [0.65, 0.35], 100, signature="q1")[1] > 0.5
     assert cal.apply("choice", [0.65, 0.35], 100, signature="q2")[0] > 0.5
+
+
+def test_hard_target_ignores_vote_shares_and_soft_uses_them():
+    import dataclasses
+
+    recs = [dataclasses.replace(r, label_distribution=(0.5, 0.3, 0.2)) for r in _records(600)]
+    hard = fit_calibrator(recs, target="hard")
+    soft = fit_calibrator(recs, target="soft")
+    assert hard.calibrator.meta["target"] == "hard" and soft.calibrator.meta["target"] == "soft"
+    assert hard.summary["choice"]["before"]["nll"] != soft.summary["choice"]["before"]["nll"]
+
+
+def test_unknown_target_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError):
+        fit_calibrator(_records(100), target="votes")

@@ -1,6 +1,7 @@
 """Pick the best calibration method per question type on held-out data."""
 from __future__ import annotations
 
+import dataclasses
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ PREFERENCE = ("identity", "temperature", "ets", "adaptive", "dirichlet")  # simp
 MIN_NLL_GAIN = 0.002  # a method must lower held-out NLL by this much to replace raw probabilities
 ECE_TOLERANCE = 0.0  # ...and must not raise held-out calibration error
 ACCURACY_TOLERANCE = 0.0  # ...or lower held-out accuracy (dirichlet can change the winner)
+TARGETS = ("hard", "soft")  # fit to the winning label, or to the label's vote shares
 
 
 @dataclass(frozen=True)
@@ -93,7 +95,16 @@ def _used_maps(maps: dict[str, DirichletMap], kinds: Iterable[str], records: lis
             if k in sigs or (k.startswith("kind:") and k.split(":")[1] in kinds)}
 
 
-def fit_calibrator(records: list[DecisionRecord], *, meta: dict[str, Any] | None = None, seed: int = 0) -> FitResult:
+def fit_calibrator(records: list[DecisionRecord], *, meta: dict[str, Any] | None = None, seed: int = 0,
+                   target: str = "hard") -> FitResult:
+    """`target="hard"` fits and selects against the winning label, which is what accuracy-based calibration
+    error measures. `"soft"` fits to vote shares: closer to how labelers disagree, but less confident than
+    the winner-based scores reward."""
+    if target not in TARGETS:
+        raise ValueError(f"unknown target {target!r}; expected one of {TARGETS}")
+    if target == "hard":
+        records = [dataclasses.replace(r, label_distribution=None) for r in records]
+    meta = {**(meta or {}), "target": target}
     by_kind: dict[str, list[DecisionRecord]] = defaultdict(list)
     for r in records:
         by_kind[r.kind].append(r)
