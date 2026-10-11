@@ -120,10 +120,10 @@ def cmd_collect(args) -> int:
     return 0
 
 
-def build_examples(cases, tokenizer):
+def build_examples(cases, tokenizer, labels="hard"):
     from .train.examples import build_examples as build
 
-    return build(cases, tokenizer)
+    return build(cases, tokenizer, labels)
 
 
 def cmd_lora(args) -> int:
@@ -135,7 +135,7 @@ def cmd_lora(args) -> int:
         cases = cases[: args.limit]
     engine = Engine(args.model, parity_check=False)
     engine.load()
-    examples, stats = build_examples(cases, engine._tokenizer)
+    examples, stats = build_examples(cases, engine._tokenizer, args.labels)
     # The outer held-out groups are the calibration fit's test set; checkpoint selection must not see them.
     pool = [e for e in examples if not is_heldout(e.group_id)]
     train_ex = [e for e in pool if not is_heldout(e.group_id, salt="inner")]
@@ -295,6 +295,8 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--val-cases", type=int, default=60)
     lo.add_argument("--limit", type=int, default=None)
     lo.add_argument("--seed", type=int, default=0)
+    lo.add_argument("--labels", choices=["hard", "soft"], default="hard",
+                    help="train toward the winning label (default) or the vote shares")
     lo.set_defaults(func=cmd_lora)
 
     f = sub.add_parser("fit", help="fit calibration on decision records")
