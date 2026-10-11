@@ -113,3 +113,46 @@ def test_cli_lora_trains_and_writes_an_adapter(tmp_path, monkeypatch, capsys):
     meta = _json.loads((out / "adapter_config.json").read_text())["opensysone"]
     assert meta["n_train_cases"] + meta["n_val_cases"] <= 12 and "best_val_loss" in meta
     assert "adapter" in capsys.readouterr().out
+
+
+def test_attaching_twice_is_refused():
+    model = _tiny()
+    attach_lora(model, LoraConfig(layers=2, rank=4))
+    with pytest.raises(RuntimeError):
+        attach_lora(model, LoraConfig(layers=2, rank=4))
+
+
+def test_adapter_for_a_different_shape_is_refused(tmp_path):
+    model = _tiny()
+    attach_lora(model, LoraConfig(layers=2, rank=4))
+    save_adapter(model, tmp_path, LoraConfig(layers=2, rank=4))
+    import json as _json
+    cfg = _json.loads((tmp_path / "adapter_config.json").read_text())
+    cfg["lora_parameters"]["rank"] = 8
+    (tmp_path / "adapter_config.json").write_text(_json.dumps(cfg))
+    with pytest.raises(ValueError, match="does not fit"):
+        load_adapter(_tiny(), tmp_path)
+
+
+def test_cli_lora_never_validates_on_outer_heldout_groups(tmp_path, monkeypatch):
+    from collections import Counter
+
+    from opensysone import cli
+    from opensysone import engine as engine_mod
+    from opensysone.calib.records import is_heldout
+
+    seen = {}
+    monkeypatch.setattr(engine_mod, "_load", lambda model_id: (_tiny(), None))
+    monkeypatch.setattr(engine_mod, "build_stamp", lambda m, c: {})
+    examples = [_case(i, True) for i in range(60)]
+    monkeypatch.setattr(cli, "build_examples", lambda cases, tok: (examples, Counter()))
+
+    def fake_train(model, train_ex, val_ex, cfg, log):
+        seen["groups"] = [e.group_id for e in [*train_ex, *val_ex]]
+        return {"best_val_loss": 0.0, "history": []}
+
+    monkeypatch.setattr("opensysone.train.lora.train", fake_train)
+    cases = tmp_path / "c.jsonl"
+    cases.write_text('{"id": "x"}\n')
+    assert cli.main(["lora", str(cases), "--out", str(tmp_path / "a"), "--layers", "2", "--rank", "4"]) == 0
+    assert seen["groups"] and not any(is_heldout(g) for g in seen["groups"])

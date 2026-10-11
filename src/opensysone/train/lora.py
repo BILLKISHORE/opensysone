@@ -42,6 +42,8 @@ class LoraConfig:
 def attach_lora(model, cfg: LoraConfig) -> None:
     from mlx_lm.tuner.utils import linear_to_lora_layers
 
+    if any("lora_" in k for k, _ in tree_flatten(model.parameters())):
+        raise RuntimeError("this model already has LoRA layers; load a fresh model before attaching another adapter")
     model.freeze()
     linear_to_lora_layers(model, cfg.layers, {"rank": cfg.rank, "scale": cfg.scale, "dropout": cfg.dropout})
 
@@ -135,6 +137,14 @@ def load_adapter(model, directory: str | Path) -> str:
     lp = config["lora_parameters"]
     attach_lora(model, LoraConfig(layers=config["num_layers"], rank=lp["rank"], scale=lp["scale"],
                                   dropout=lp.get("dropout", 0.0)))
-    model.load_weights(str(directory / ADAPTER_FILE), strict=False)
+    weights = mx.load(str(directory / ADAPTER_FILE))
+    expected = {k: v.shape for k, v in tree_flatten(model.trainable_parameters())}
+    got = {k: v.shape for k, v in weights.items()}
+    if got != expected:
+        missing, extra = sorted(set(expected) - set(got)), sorted(set(got) - set(expected))
+        shapes = sorted(k for k in set(got) & set(expected) if got[k] != expected[k])
+        raise ValueError(f"adapter does not fit this model: missing {missing[:3]}, unexpected {extra[:3]}, "
+                         f"wrong shape {shapes[:3]}")
+    model.load_weights(list(weights.items()), strict=False)
     mx.eval(model.parameters())
     return adapter_sha(directory)
