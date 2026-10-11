@@ -154,7 +154,8 @@ def cmd_lora(args) -> int:
 
 def cmd_fit(args) -> int:
     records = load_decisions(args.decisions)
-    result = fit_calibrator(records, meta={"decisions": [str(p) for p in args.decisions]}, target=args.target)
+    result = fit_calibrator(records, meta={"decisions": [str(p) for p in args.decisions]}, target=args.target,
+                            split_salt=args.split_salt)
     sha = result.calibrator.save(args.out)
     Path(args.out, "fit_summary.json").write_text(json.dumps(result.summary, indent=2, sort_keys=True) + "\n")
     print(f"calibration {sha} written to {args.out}")
@@ -301,6 +302,9 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--out", required=True)
     f.add_argument("--target", choices=["hard", "soft"], default="hard",
                    help="fit to the winning label (default) or to the label vote shares")
+    f.add_argument("--split-salt", default="",
+                   help="salt for the fit/held-out case split; use one (e.g. calib) when all records are held out "
+                        "from LoRA training")
     f.set_defaults(func=cmd_fit)
 
     r = sub.add_parser("report", help="calibration report with reliability diagrams")
