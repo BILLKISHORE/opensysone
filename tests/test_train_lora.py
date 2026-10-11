@@ -90,3 +90,26 @@ def test_engine_without_adapter_stamps_none(monkeypatch):
     e = engine_mod.Engine("x", parity_check=False)
     e.load()
     assert e.stamp["adapter"] is None
+
+
+def test_cli_lora_trains_and_writes_an_adapter(tmp_path, monkeypatch, capsys):
+    import json as _json
+    from collections import Counter
+
+    from opensysone import cli
+    from opensysone import engine as engine_mod
+
+    model = _tiny()
+    monkeypatch.setattr(engine_mod, "_load", lambda model_id: (model, None))
+    monkeypatch.setattr(engine_mod, "build_stamp", lambda m, c: {})
+    examples = [_case(i, True) for i in range(12)]
+    monkeypatch.setattr(cli, "build_examples", lambda cases, tok: (examples, Counter(cases=12)))
+    cases = tmp_path / "cases.jsonl"
+    cases.write_text("\n".join(_json.dumps({"id": f"c{i}"}) for i in range(12)) + "\n")
+    out = tmp_path / "adapter"
+    assert cli.main(["lora", str(cases), "--out", str(out), "--layers", "2", "--rank", "4", "--lr", "5e-3",
+                     "--warmup", "1", "--eval-every", "5"]) == 0
+    assert (out / "adapters.safetensors").exists()
+    meta = _json.loads((out / "adapter_config.json").read_text())["opensysone"]
+    assert meta["n_train_cases"] + meta["n_val_cases"] <= 12 and "best_val_loss" in meta
+    assert "adapter" in capsys.readouterr().out

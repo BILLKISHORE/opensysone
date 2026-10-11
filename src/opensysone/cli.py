@@ -13,7 +13,7 @@ from .calib.calibrators import Calibrator
 from .calib.collect import collect as run_collect
 from .calib.data import TD_REVISION, typed_decisions_cases
 from .calib.fit import fit_calibrator
-from .calib.records import load_decisions, read_jsonl
+from .calib.records import is_heldout, load_decisions, read_jsonl
 from .calib.store import OutcomeStore
 from .calib.report import evaluate, render_report
 from .engine import Engine
@@ -51,7 +51,7 @@ def _write_jsonl(path: str, rows: list[dict]) -> None:
 def cmd_serve(args) -> int:
     cache = DecisionCache(path=args.cache_path) if args.cache_path else DecisionCache()
     engine = Engine(args.model, parity_check=not args.no_parity_check, cache=cache,
-                    calibrator=_calibrator(args.calibration))
+                    calibrator=_calibrator(args.calibration), adapter=args.adapter)
     engine.load()
     store = OutcomeStore(args.outcomes, feedback_out=args.feedback_out) if args.outcomes else None
     app = create_app(engine, api_key=args.api_key, max_queue=args.max_queue,
@@ -68,7 +68,8 @@ def cmd_decide(args) -> int:
         "prior_correction": args.prior_correction,
         "cache": not args.no_cache,
     })
-    engine = Engine(args.model, parity_check=not args.no_parity_check, calibrator=_calibrator(args.calibration))
+    engine = Engine(args.model, parity_check=not args.no_parity_check, calibrator=_calibrator(args.calibration),
+                    adapter=args.adapter)
     engine.load()
     try:
         out = engine.decide(req)
@@ -112,10 +113,40 @@ def cmd_collect(args) -> int:
     cases = list(read_jsonl(args.cases))
     if args.limit is not None:
         cases = cases[: args.limit]
-    engine = Engine(args.model, parity_check=not args.no_parity_check)
+    engine = Engine(args.model, parity_check=not args.no_parity_check, adapter=args.adapter)
     engine.load()
     stats = run_collect(engine, cases, args.out, samples=args.samples, log=lambda m: print(m, flush=True))
     print(json.dumps(stats))
+    return 0
+
+
+def build_examples(cases, tokenizer):
+    from .train.examples import build_examples as build
+
+    return build(cases, tokenizer)
+
+
+def cmd_lora(args) -> int:
+    """Train a LoRA adapter on labeled cases; validation is the held-out share of the training cases."""
+    from .train.lora import LoraConfig, attach_lora, save_adapter, train
+
+    cases = list(read_jsonl(args.cases))
+    if args.limit is not None:
+        cases = cases[: args.limit]
+    engine = Engine(args.model, parity_check=False)
+    engine.load()
+    examples, stats = build_examples(cases, engine._tokenizer)
+    train_ex = [e for e in examples if not is_heldout(e.group_id)]
+    val_ex = [e for e in examples if is_heldout(e.group_id)][: args.val_cases]
+    cfg = LoraConfig(layers=args.layers, rank=args.rank, scale=args.scale, lr=args.lr, epochs=args.epochs,
+                     warmup=args.warmup, eval_every=args.eval_every, seed=args.seed)
+    print(f"examples {dict(stats)}; train {len(train_ex)} cases, val {len(val_ex)} cases", flush=True)
+    attach_lora(engine._model, cfg)
+    result = train(engine._model, train_ex, val_ex, cfg, log=lambda m: print(m, flush=True))
+    sha = save_adapter(engine._model, args.out, cfg, meta={
+        "backbone": args.model, "cases": str(args.cases), "n_train_cases": len(train_ex),
+        "n_val_cases": len(val_ex), **result})
+    print(f"adapter {sha} written to {args.out} (best val loss {result['best_val_loss']:.4f})")
     return 0
 
 
@@ -181,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--calibration", default=None, help="calibration directory from `opensysone fit`")
     s.add_argument("--outcomes", default=None, help="SQLite file for decisions and feedback (enables audit/queue)")
     s.add_argument("--feedback-out", default=None, help="append labeled feedback as decision JSONL for `fit`")
+    s.add_argument("--adapter", default=None, help="LoRA adapter directory from `opensysone lora`")
     s.set_defaults(func=cmd_serve)
 
     d = sub.add_parser("decide", help="decide one state from the terminal")
@@ -194,6 +226,7 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--no-cache", action="store_true")
     d.add_argument("--no-parity-check", action="store_true")
     d.add_argument("--calibration", default=None, help="calibration directory from `opensysone fit`")
+    d.add_argument("--adapter", default=None, help="LoRA adapter directory from `opensysone lora`")
     d.set_defaults(func=cmd_decide)
 
     l = sub.add_parser("lint", help="check a questions file without calling the model")
@@ -218,7 +251,24 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--samples", type=int, default=1)
     c.add_argument("--limit", type=int, default=None)
     c.add_argument("--no-parity-check", action="store_true")
+    c.add_argument("--adapter", default=None, help="LoRA adapter directory from `opensysone lora`")
     c.set_defaults(func=cmd_collect)
+
+    lo = sub.add_parser("lora", help="fine-tune a LoRA adapter on labeled cases (soft labels)")
+    lo.add_argument("cases")
+    lo.add_argument("--out", required=True)
+    lo.add_argument("--model", default=DEFAULT_MODEL)
+    lo.add_argument("--layers", type=int, default=16, help="adapt the last N transformer blocks")
+    lo.add_argument("--rank", type=int, default=8)
+    lo.add_argument("--scale", type=float, default=20.0)
+    lo.add_argument("--lr", type=float, default=1e-4)
+    lo.add_argument("--epochs", type=int, default=1)
+    lo.add_argument("--warmup", type=int, default=20)
+    lo.add_argument("--eval-every", type=int, default=100)
+    lo.add_argument("--val-cases", type=int, default=60)
+    lo.add_argument("--limit", type=int, default=None)
+    lo.add_argument("--seed", type=int, default=0)
+    lo.set_defaults(func=cmd_lora)
 
     f = sub.add_parser("fit", help="fit calibration on decision records")
     f.add_argument("decisions", nargs="+")
