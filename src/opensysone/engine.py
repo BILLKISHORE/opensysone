@@ -162,24 +162,24 @@ class Engine:
             seed = int(key[:8], 16)
             per_sample: list[dict[str, list[float]]] = []
             for s in range(req.samples):
-                # Later samples only rerun questions whose order changes; the rest would repeat sample 0.
-                # Constraints can tie fields together, so then every field runs every time.
-                active = {q: spec for q, spec in pending.items()
-                          if s == 0 or compiled.constraints or compiled.plans[q].kind in REORDERED_KINDS}
-                if not active:
-                    break
-                permuted = {q: permute_choices(spec, seed, s, compiled.plans[q].kind) for q, spec in active.items()}
+                # Every sample reads the full schema, so all samples answer the same prompt with only the
+                # choice order rotated. Rotation cancels a position preference fully when samples is a
+                # multiple of the option count.
+                if s > 0 and not any(compiled.plans[q].kind in REORDERED_KINDS for q in pending):
+                    break  # nothing would change: the next sample repeats sample 0
+                permuted = {q: permute_choices(spec, seed, s, compiled.plans[q].kind) for q, spec in pending.items()}
                 result = _run_generation(
                     self._model, self._tokenizer, compiled.context, _structured(permuted),
                     max_rows=self.max_rows, scoring=self.scoring,
                     prior_correction=req.prior_correction,
                     constraints=compiled.constraints or None,
                 )
-                input_tokens = int(result.get("prompt_tokens", 0))
-                timing = {k: result.get(k) for k in _TIMING_KEYS}
+                if s == 0:  # the calibrator's prompt-length feature and timing describe the caller's prompt
+                    input_tokens = int(result.get("prompt_tokens", 0))
+                    timing = {k: result.get(k) for k in _TIMING_KEYS}
                 per_sample.append({
                     q: distribution_from_telemetry(compiled.plans[q], result["field_telemetry"][q])
-                    for q in active if q not in ruled
+                    for q in pending if q not in ruled
                 })
             for q in pending:
                 if q not in ruled:

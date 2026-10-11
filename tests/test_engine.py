@@ -265,14 +265,33 @@ def test_score_and_noul_are_never_reordered():
     assert permute_choices(noul, 7, 1, kind="noul") == noul
 
 
-def test_repeat_samples_rerun_only_reordered_questions(engine):
+def test_every_sample_reads_all_questions_and_only_choice_rotates(engine):
     out = engine.decide(_req(samples=2, cache=False))
-    first, second = (sorted(_names(c["schema"])) for c in engine._runs.calls)
-    assert first == ["team", "tone", "urgent"]
-    assert second == ["team"]
+    first, second = engine._runs.calls
+    assert sorted(_names(first["schema"])) == sorted(_names(second["schema"])) == ["team", "tone", "urgent"]
+    assert _choices_of(second["schema"], "team") == ["billing", "outage"]
+    assert _choices_of(second["schema"], "tone") == _choices_of(first["schema"], "tone")
     assert out["answers"]["team"]["probabilities"]["outage"] == pytest.approx(0.5)
-    assert out["answers"]["urgent"]["noul"] == pytest.approx(0.9)
+
+
+def test_samples_stop_early_when_nothing_can_rotate(engine):
+    req = SystemOneRequest.model_validate({"state": "x", "cache": False, "samples": 3,
+                                           "questions": {"urgent": QUESTIONS["urgent"], "tone": QUESTIONS["tone"]}})
+    engine.decide(req)
+    assert len(engine._runs.calls) == 1
 
 
 def _names(schema):
     return list(schema.fields) if hasattr(schema, "fields") else list(schema)
+
+
+def test_prompt_tokens_come_from_the_first_sample(engine, monkeypatch):
+    calls = engine._runs
+
+    def growing(*a, **kw):
+        out = calls(*a, **kw)
+        return {**out, "prompt_tokens": 100 + 7 * (len(calls.calls) - 1)}
+
+    monkeypatch.setattr(engine_mod, "_run_generation", growing)
+    out = engine.decide(_req(samples=3, cache=False))
+    assert out["usage"]["input_tokens"] == 100
