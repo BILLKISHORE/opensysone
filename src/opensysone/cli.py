@@ -13,7 +13,7 @@ from .calib.calibrators import Calibrator
 from .calib.collect import collect as run_collect
 from .calib.data import TD_REVISION, typed_decisions_cases
 from .calib.fit import fit_calibrator
-from .calib.records import is_heldout, load_decisions, read_jsonl
+from .calib.records import CALIBRATED_KINDS, is_heldout, load_decisions, read_jsonl
 from .calib.store import OutcomeStore
 from .calib.report import evaluate, render_report
 from .engine import Engine
@@ -180,6 +180,24 @@ def cmd_report(args) -> int:
     return 0
 
 
+def cmd_calibrate(args) -> int:
+    """Apply a fitted calibration to decision lines; keeps the raw probabilities under answer.raw_probs."""
+    from .calib.records import parse_decision
+
+    cal = Calibrator.load(args.calibration)
+    out = []
+    for line in read_jsonl(args.decisions):
+        r = parse_decision(line)
+        a = line["answer"]
+        probs = cal.apply(r.kind, r.probs, r.prompt_tokens, signature=r.signature) if r.kind in CALIBRATED_KINDS \
+            else list(r.probs)
+        out.append({**line, "answer": {**a, "probs": probs, "raw_probs": a["probs"]},
+                    "stamp": {**(line.get("stamp") or {}), "calibration": cal.sha}})
+    _write_jsonl(args.out, out)
+    print(f"{len(out)} calibrated decisions written to {args.out} (calibration {cal.sha})")
+    return 0
+
+
 def cmd_crossfit(args) -> int:
     from .calib.crossfit import crossfit
 
@@ -315,6 +333,12 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--calibration", default=None)
     r.add_argument("--title", default="Calibration report")
     r.set_defaults(func=cmd_report)
+
+    ca = sub.add_parser("calibrate", help="apply a fitted calibration to decision lines")
+    ca.add_argument("decisions")
+    ca.add_argument("--calibration", required=True)
+    ca.add_argument("--out", required=True)
+    ca.set_defaults(func=cmd_calibrate)
 
     x = sub.add_parser("crossfit", help="cross-fitted calibration report: no separate training set needed")
     x.add_argument("decisions", nargs="+")

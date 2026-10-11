@@ -76,3 +76,17 @@ def test_crossfit_command_writes_a_report(tmp_path, capsys):
     metrics = json.loads((tmp_path / "x" / "metrics.json").read_text())
     assert metrics["all"]["calibrated"]["ece"] < metrics["all"]["raw"]["ece"]
     assert "cross-fitted" in (tmp_path / "x" / "report.md").read_text()
+
+
+def test_calibrate_command_writes_calibrated_decision_lines(tmp_path):
+    d = tmp_path / "dec.jsonl"
+    _write_decisions(d)
+    assert cli.main(["fit", str(d), "--out", str(tmp_path / "cal")]) == 0
+    out = tmp_path / "calibrated.jsonl"
+    assert cli.main(["calibrate", str(d), "--calibration", str(tmp_path / "cal"), "--out", str(out)]) == 0
+    raw = [json.loads(x) for x in d.read_text().splitlines()]
+    cal = [json.loads(x) for x in out.read_text().splitlines()]
+    assert len(cal) == len(raw) and cal[0]["id"] == raw[0]["id"]
+    assert cal[0]["answer"]["probs"][0] < raw[0]["answer"]["probs"][0]  # overconfidence pulled down
+    assert cal[0]["answer"]["raw_probs"] == raw[0]["answer"]["probs"]
+    assert cal[0]["stamp"]["calibration"]
