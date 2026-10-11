@@ -161,7 +161,8 @@ def test_bulk_runs_each_item(engine):
 class Sharpen:
     sha = "cafe"
 
-    def apply(self, kind, probs, prompt_tokens):
+    def apply(self, kind, probs, prompt_tokens, signature=None):
+        self.signatures = getattr(self, "signatures", []) + [signature]
         sq = [p * p for p in probs]
         return [x / sum(sq) for x in sq]
 
@@ -230,3 +231,18 @@ def test_float32_head_leaves_models_without_a_head_alone():
 
 def test_load_records_head_precision_in_stamp(engine):
     assert engine.stamp["head"] == "unchanged"
+
+
+def test_calibrator_gets_the_same_signature_the_training_records_have(engine):
+    from opensysone.calib.records import decision_line, parse_decision
+
+    question = {"type": "choice", "instructions": "Which team?", "criteria": {"outage": "", "billing": ""}}
+    req = SystemOneRequest.model_validate({"state": "x", "cache": False, "questions": {"team": question}})
+    cal = Sharpen()
+    engine.set_calibrator(cal)
+    out = engine.decide(req)
+    raw = out[engine_mod.RAW_KEY]["questions"]["team"]
+    rec = parse_decision(decision_line(case_id="c", group_id="c", qid="team", question=question, kind=raw["kind"],
+                                       options=raw["options"], probs=raw["probs"], prompt_tokens=1, label="outage",
+                                       label_distribution=None, source="t", stamp={}))
+    assert cal.signatures == [rec.signature] and rec.signature
