@@ -61,7 +61,7 @@ def test_save_load_roundtrip_and_sha(tmp_path):
     sha = c.save(tmp_path)
     assert len(sha) == 16 and (tmp_path / CALIBRATION_FILE).exists()
     body = json.loads((tmp_path / CALIBRATION_FILE).read_text())
-    assert body["format"] == 1 and body["head"] is None
+    assert body["format"] == 2 and body["head"] is None
     loaded = Calibrator.load(tmp_path)
     assert loaded.sha == sha
     assert loaded.kinds["choice"].temperature == pytest.approx(1.7)
@@ -71,3 +71,55 @@ def test_save_load_roundtrip_and_sha(tmp_path):
 def test_unknown_method_rejected():
     with pytest.raises(ValueError, match="method"):
         KindCalibration("magic")
+
+
+def test_ets_keeps_argmax_and_mixes_toward_uniform():
+    from opensysone.calib.calibrators import ets_scale
+
+    p = [0.7, 0.2, 0.1]
+    q = ets_scale(p, 2.0, (0.5, 0.3, 0.2))
+    assert q.index(max(q)) == 0 and sum(q) == pytest.approx(1.0)
+    assert ets_scale(p, 1.0, (0.0, 1.0, 0.0)) == pytest.approx(p)
+    assert ets_scale(p, 1.0, (0.0, 0.0, 1.0)) == pytest.approx([1 / 3] * 3)
+
+
+def test_fit_ets_prefers_uniform_when_model_is_noise():
+    from opensysone.calib.calibrators import fit_ets
+
+    rng = random.Random(0)
+    samples = []
+    for _ in range(300):
+        y = rng.randrange(2)
+        samples.append(([0.95, 0.05], [1.0 if k == y else 0.0 for k in range(2)]))
+    w = fit_ets(samples, 1.0)
+    assert w[2] > 0.5
+
+
+def test_dirichlet_kind_uses_signature_map_then_kind_fallback(tmp_path):
+    from opensysone.calib.dirichlet import DirichletMap
+
+    flip = DirichletMap(((0.0, 1.0), (1.0, 0.0)), (0.0, 0.0))
+    maps = {"sig:abc": flip, "kind:noul:2": DirichletMap.identity(2)}
+    cal = Calibrator({"noul": KindCalibration("dirichlet", 1.0)}, maps=maps)
+    assert cal.apply("noul", [0.8, 0.2], 10, signature="abc") == pytest.approx([0.2, 0.8])
+    assert cal.apply("noul", [0.8, 0.2], 10, signature="other") == pytest.approx([0.8, 0.2])
+    assert cal.apply("noul", [0.8, 0.1, 0.1], 10, signature="abc")[0] == pytest.approx(0.8)  # no map for k=3
+    cal.save(tmp_path)
+    again = Calibrator.load(tmp_path)
+    assert again.apply("noul", [0.8, 0.2], 10, signature="abc") == pytest.approx([0.2, 0.8])
+    assert again.sha == cal.sha
+
+
+def test_ets_kind_roundtrips(tmp_path):
+    cal = Calibrator({"choice": KindCalibration("ets", 1.5, ets=(0.6, 0.3, 0.1))})
+    cal.save(tmp_path)
+    again = Calibrator.load(tmp_path)
+    assert again.apply("choice", [0.7, 0.3], 10) == pytest.approx(cal.apply("choice", [0.7, 0.3], 10))
+
+
+def test_format_one_files_still_load(tmp_path):
+    (tmp_path / CALIBRATION_FILE).write_text(json.dumps(
+        {"format": 1, "kinds": {"choice": {"method": "temperature", "temperature": 2.0, "metrics": {}}},
+         "head": None, "meta": {}}))
+    cal = Calibrator.load(tmp_path)
+    assert cal.apply("choice", [0.9, 0.1], 5) == pytest.approx(temperature_scale([0.9, 0.1], 2.0))
