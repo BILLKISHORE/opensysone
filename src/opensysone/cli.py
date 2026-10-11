@@ -152,7 +152,7 @@ def cmd_lora(args) -> int:
 
 def cmd_fit(args) -> int:
     records = load_decisions(args.decisions)
-    result = fit_calibrator(records, meta={"decisions": [str(p) for p in args.decisions]})
+    result = fit_calibrator(records, meta={"decisions": [str(p) for p in args.decisions]}, target=args.target)
     sha = result.calibrator.save(args.out)
     Path(args.out, "fit_summary.json").write_text(json.dumps(result.summary, indent=2, sort_keys=True) + "\n")
     print(f"calibration {sha} written to {args.out}")
@@ -273,6 +273,8 @@ def build_parser() -> argparse.ArgumentParser:
     f = sub.add_parser("fit", help="fit calibration on decision records")
     f.add_argument("decisions", nargs="+")
     f.add_argument("--out", required=True)
+    f.add_argument("--target", choices=["hard", "soft"], default="hard",
+                   help="fit to the winning label (default) or to the label vote shares")
     f.set_defaults(func=cmd_fit)
 
     r = sub.add_parser("report", help="calibration report with reliability diagrams")
