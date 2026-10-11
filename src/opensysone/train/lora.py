@@ -48,13 +48,26 @@ def attach_lora(model, cfg: LoraConfig) -> None:
     linear_to_lora_layers(model, cfg.layers, {"rank": cfg.rank, "scale": cfg.scale, "dropout": cfg.dropout})
 
 
-def case_loss(model, ex: CaseExample) -> mx.array:
-    """Mean soft cross-entropy over the case's questions, read where the engine reads them."""
-    from jevmlx.engine import _broadcast_cache
+def prefill(model, ex: CaseExample) -> list:
+    """The case prompt in the engine's eval mode (fused kernels, current adapter weights), outside any
+    gradient. Training reads exactly the cache the engine would serve from, without backpropagating
+    through hundreds of prompt tokens, which Qwen3.5's linear-attention layers can only do one token
+    at a time."""
     from mlx_lm.models.cache import make_prompt_cache
 
+    was_training = model.training
+    model.eval()
     cache = make_prompt_cache(model)
     model(mx.array(ex.prompt)[None], cache=cache)
+    mx.eval([c.state for c in cache])
+    model.train(was_training)
+    return cache
+
+
+def rows_loss(model, ex: CaseExample, cache: list) -> mx.array:
+    """Mean cross-entropy over the case's questions, each row scored on a copy of the prompt cache."""
+    from jevmlx.engine import _broadcast_cache
+
     total = mx.array(0.0)
     for f in ex.fields:
         logits = model(mx.array(f.row)[None], cache=_broadcast_cache(cache, 1))[0, f.position]
@@ -63,7 +76,14 @@ def case_loss(model, ex: CaseExample) -> mx.array:
     return total / len(ex.fields)
 
 
+def case_loss(model, ex: CaseExample) -> mx.array:
+    """The loss the engine's own probabilities give on one case (no gradient through the prompt)."""
+    return rows_loss(model, ex, prefill(model, ex))
+
+
 def mean_loss(model, examples: Sequence[CaseExample]) -> float:
+    """Validation loss in eval mode: the same fused kernels the engine serves with."""
+    model.eval()
     losses = []
     for ex in examples:
         loss = case_loss(model, ex)
@@ -80,11 +100,17 @@ def _lr(step: int, total: int, cfg: LoraConfig) -> float:
 
 def train(model, train_ex: Sequence[CaseExample], val_ex: Sequence[CaseExample], cfg: LoraConfig,
           log: Callable[[str], None] = print) -> dict:
-    """Train attached LoRA weights; keep the weights with the lowest validation loss."""
+    """Train attached LoRA weights; keep the weights with the lowest validation loss.
+
+    Each step prefills the prompt in eval mode (see `prefill`), then scores the question rows in train
+    mode, where Qwen3.5 linear-attention layers use the plain ops path that has gradients. The gradient is
+    truncated at the prompt: the adapter learns from how each question is answered over the case, not from
+    re-reading the case. Validation and the returned model are in eval mode.
+    """
     rng = random.Random(cfg.seed)
     total = cfg.epochs * len(train_ex)
     opt = optim.Adam(learning_rate=cfg.lr)
-    step_fn = nn.value_and_grad(model, case_loss)
+    step_fn = nn.value_and_grad(model, lambda m, ex, cache: rows_loss(m, ex, cache))
     best_val = mean_loss(model, val_ex)
     best = dict(tree_flatten(model.trainable_parameters()))
     history = [{"step": 0, "val_loss": best_val}]
@@ -94,8 +120,10 @@ def train(model, train_ex: Sequence[CaseExample], val_ex: Sequence[CaseExample],
         order = list(train_ex)
         rng.shuffle(order)
         for ex in order:
+            cache = prefill(model, ex)
+            model.train()
             opt.learning_rate = _lr(step, total, cfg)
-            loss, grads = step_fn(model, ex)
+            loss, grads = step_fn(model, ex, cache)
             opt.update(model, grads)
             mx.eval(model.trainable_parameters(), opt.state, loss)
             running.append(float(loss.item()))
@@ -110,6 +138,7 @@ def train(model, train_ex: Sequence[CaseExample], val_ex: Sequence[CaseExample],
                 if val < best_val:
                     best_val, best = val, dict(tree_flatten(model.trainable_parameters()))
     model.update(tree_unflatten(list(best.items())))
+    model.eval()
     mx.eval(model.trainable_parameters())
     return {"best_val_loss": best_val, "history": history}
 
