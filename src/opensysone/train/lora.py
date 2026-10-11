@@ -32,7 +32,7 @@ class LoraConfig:
     rank: int = 8
     scale: float = 20.0
     dropout: float = 0.0
-    lr: float = 1e-4
+    lr: float = 1e-5  # mlx-lm default for scale 20; 1e-4 raised validation loss 0.96 -> 2.10 in 100 steps
     epochs: int = 1
     warmup: int = 20
     eval_every: int = 100

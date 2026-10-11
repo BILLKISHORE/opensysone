@@ -288,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--layers", type=int, default=16, help="adapt the last N transformer blocks")
     lo.add_argument("--rank", type=int, default=8)
     lo.add_argument("--scale", type=float, default=20.0)
-    lo.add_argument("--lr", type=float, default=1e-4)
+    lo.add_argument("--lr", type=float, default=1e-5)
     lo.add_argument("--epochs", type=int, default=1)
     lo.add_argument("--warmup", type=int, default=20)
     lo.add_argument("--eval-every", type=int, default=100)
