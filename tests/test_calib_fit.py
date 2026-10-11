@@ -125,3 +125,12 @@ def test_unknown_target_is_rejected():
 
     with pytest.raises(ValueError):
         fit_calibrator(_records(100), target="votes")
+
+
+def test_split_salt_lets_records_from_one_heldout_pool_be_fit():
+    from opensysone.calib.records import is_heldout
+
+    pool = [r for r in _records(3000) if is_heldout(r.group_id)]
+    assert fit_calibrator(pool).summary["choice"]["n_train"] == 0
+    s = fit_calibrator(pool, split_salt="calib").summary["choice"]
+    assert s["n_train"] > 0 and s["n_heldout"] > 0
