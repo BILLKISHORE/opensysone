@@ -29,6 +29,34 @@ def _load(model_id: str):
     return load_engine(model_id)
 
 
+def float32_head(model) -> str:
+    """Run the output head in float32 and say which precision the logits have.
+
+    A bf16 head rounds logits near 16 to 32 to steps of 0.125, so close options tie exactly and
+    every probability carries that rounding. Only the head changes; the body stays bf16.
+    """
+    head = getattr(model, "lm_head", None)
+    if head is None:
+        return "unchanged"
+    if getattr(head, "is_float32_head", False):
+        return "float32"
+    import mlx.core as mx
+    import mlx.nn as nn
+
+    class Float32Head(nn.Module):
+        is_float32_head = True
+
+        def __init__(self, inner):
+            super().__init__()
+            self.inner = inner
+
+        def __call__(self, x):
+            return self.inner(x.astype(mx.float32))
+
+    model.lm_head = Float32Head(head)
+    return "float32"
+
+
 def _parity(model, tokenizer) -> dict[str, Any]:
     from jevmlx.parity import check_scoring_parity
 
@@ -72,7 +100,8 @@ class Engine:
 
     def load(self) -> None:
         self._model, self._tokenizer = _load(self.model_id)
-        self.stamp = build_stamp(self.model_id, getattr(self.calibrator, "sha", None))
+        self.stamp = {**build_stamp(self.model_id, getattr(self.calibrator, "sha", None)),
+                      "head": float32_head(self._model)}
         if self.parity_check and self.max_rows is None:
             self.parity = _parity(self._model, self._tokenizer)
             if not self.parity.get("passed", False):

@@ -195,3 +195,38 @@ def test_rules_and_multi_are_not_calibrated(engine):
     out = engine.decide(req)
     assert out["answers"]["refund"]["noul"] == 1.0
     assert out[engine_mod.RAW_KEY]["questions"]["refund"]["source"] == "rule"
+
+
+class TinyLM:
+    """A stand-in with an untied bf16 head, like Qwen3.8's lm_head."""
+
+    def __init__(self):
+        import mlx.core as mx
+        import mlx.nn as nn
+
+        self.lm_head = nn.Linear(4, 3, bias=False)
+        self.lm_head.weight = (mx.arange(12).reshape(3, 4) / 7 + 16).astype(mx.bfloat16)
+
+
+def test_float32_head_stops_bf16_rounding_of_logits():
+    import mlx.core as mx
+
+    model = TinyLM()
+    x = (mx.arange(4).reshape(1, 4) / 3 + 1).astype(mx.bfloat16)
+    exact = x.astype(mx.float32) @ model.lm_head.weight.astype(mx.float32).T
+    assert model.lm_head(x).dtype == mx.bfloat16
+
+    assert engine_mod.float32_head(model) == "float32"
+    out = model.lm_head(x)
+    assert out.dtype == mx.float32
+    assert mx.allclose(out, exact, atol=1e-4).item()
+    assert engine_mod.float32_head(model) == "float32"  # idempotent: no second wrap
+    assert model.lm_head(x).dtype == mx.float32
+
+
+def test_float32_head_leaves_models_without_a_head_alone():
+    assert engine_mod.float32_head(object()) == "unchanged"
+
+
+def test_load_records_head_precision_in_stamp(engine):
+    assert engine.stamp["head"] == "unchanged"
