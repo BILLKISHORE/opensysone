@@ -126,8 +126,10 @@ def cmd_fit(args) -> int:
     Path(args.out, "fit_summary.json").write_text(json.dumps(result.summary, indent=2, sort_keys=True) + "\n")
     print(f"calibration {sha} written to {args.out}")
     for kind, s in result.summary.items():
+        b, a = s["before"], s["after"]
         print(f"{kind:9s} n={s['n_train']}+{s['n_heldout']} chosen={s['chosen']:11s} "
-              f"ece {s['before']['ece']:.3f} -> {s['after']['ece']:.3f}")
+              f"ece {b['ece']:.3f} -> {a['ece']:.3f}  nll {b['nll']:.3f} -> {a['nll']:.3f}  "
+              f"acc {b['accuracy']:.3f} -> {a['accuracy']:.3f}")
     return 0
 
 
