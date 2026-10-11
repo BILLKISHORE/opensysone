@@ -43,3 +43,19 @@ def test_render_report_markdown_and_files():
     assert "| choice |" in md and "Labels are consensus." in md
     assert "![choice reliability](reliability-choice.svg)" in md
     assert set(files) == {"reliability-choice.svg", "reliability-noul.svg", "reliability-all.svg"}
+
+
+def test_evaluate_adds_case_level_intervals_for_the_headline_numbers():
+    ev = evaluate(_recs(), Calibrator({"choice": KindCalibration("temperature", 5.0)}))
+    for side in ("raw", "calibrated"):
+        ci = ev["all"][f"ci_{side}"]
+        for metric in ("accuracy", "ece", "nll"):
+            lo, hi = ci[metric]
+            assert lo <= ev["all"][side][metric] + 1e-9 and ev["all"][side][metric] - 1e-9 <= hi
+
+
+def test_render_report_shows_both_accuracies_and_intervals():
+    ev = evaluate(_recs(), Calibrator({"choice": KindCalibration("temperature", 5.0)}))
+    md, _ = render_report(ev, title="t", note="n")
+    assert "Accuracy calibrated" in md and "ECE equal-mass" in md
+    assert "95% interval" in md
