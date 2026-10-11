@@ -26,7 +26,8 @@ class FieldExample:
     row: tuple[int, ...]  # tokens scored after the shared prompt
     position: int  # index in `row` whose logits decide the question
     allowed: tuple[int, ...]  # option-code tokens read at that position, in read order
-    target: tuple[float, ...]  # soft label mass on each allowed token
+    target: tuple[float, ...]  # label mass on each allowed token
+    options: tuple[str, ...] = ()  # the answer option each allowed token stands for
 
 
 @dataclass(frozen=True)
@@ -87,7 +88,8 @@ def build_case(case: dict[str, Any], tokenizer, stats: Counter | None = None,
         mass = [sum(target.get(choices[ci], 0.0) for ci in node["children"][tok]) for tok in allowed]
         if abs(sum(mass) - 1.0) > 1e-6:
             raise ValueError(f"{case['id']}/{qid}: label options {sorted(target)} do not match {choices}")
-        fields.append(FieldExample(qid, tuple(built["rows"][ridx]), int(position), tuple(allowed), tuple(mass)))
+        names = tuple("+".join(choices[ci] for ci in node["children"][tok]) for tok in allowed)
+        fields.append(FieldExample(qid, tuple(built["rows"][ridx]), int(position), tuple(allowed), tuple(mass), names))
         stats["fields"] += 1
     if not fields:
         return None
