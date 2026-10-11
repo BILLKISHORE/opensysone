@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from . import __version__
-from .calib.records import CALIBRATED_KINDS
+from .calib.records import CALIBRATED_KINDS, question_signature
 from .answers import average_distributions, distribution_from_telemetry, permute_choices, shape_answer
 from .cache import DecisionCache, cache_key
 from .lint import LintFinding, lint_compiled
@@ -178,7 +178,8 @@ class Engine:
         if self.calibrator is not None:
             for qid, plan in compiled.plans.items():
                 if qid not in ruled and plan.kind in CALIBRATED_KINDS:
-                    dists[qid] = self.calibrator.apply(plan.kind, dists[qid], input_tokens)
+                    sig = question_signature(plan.kind, req.questions[qid].instructions, plan.options)
+                    dists[qid] = self.calibrator.apply(plan.kind, dists[qid], input_tokens, signature=sig)
         answers: dict[str, Any] = {}
         for qid, plan in compiled.plans.items():
             ans = shape_answer(plan, dists[qid])
