@@ -103,7 +103,7 @@ def test_cli_lora_trains_and_writes_an_adapter(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(engine_mod, "_load", lambda model_id: (model, None))
     monkeypatch.setattr(engine_mod, "build_stamp", lambda m, c: {})
     examples = [_case(i, True) for i in range(12)]
-    monkeypatch.setattr(cli, "build_examples", lambda cases, tok: (examples, Counter(cases=12)))
+    monkeypatch.setattr(cli, "build_examples", lambda cases, tok, labels="hard": (examples, Counter(cases=12)))
     cases = tmp_path / "cases.jsonl"
     cases.write_text("\n".join(_json.dumps({"id": f"c{i}"}) for i in range(12)) + "\n")
     out = tmp_path / "adapter"
@@ -145,7 +145,7 @@ def test_cli_lora_never_validates_on_outer_heldout_groups(tmp_path, monkeypatch)
     monkeypatch.setattr(engine_mod, "_load", lambda model_id: (_tiny(), None))
     monkeypatch.setattr(engine_mod, "build_stamp", lambda m, c: {})
     examples = [_case(i, True) for i in range(60)]
-    monkeypatch.setattr(cli, "build_examples", lambda cases, tok: (examples, Counter()))
+    monkeypatch.setattr(cli, "build_examples", lambda cases, tok, labels="hard": (examples, Counter()))
 
     def fake_train(model, train_ex, val_ex, cfg, log):
         seen["groups"] = [e.group_id for e in [*train_ex, *val_ex]]
@@ -156,3 +156,12 @@ def test_cli_lora_never_validates_on_outer_heldout_groups(tmp_path, monkeypatch)
     cases.write_text('{"id": "x"}\n')
     assert cli.main(["lora", str(cases), "--out", str(tmp_path / "a"), "--layers", "2", "--rank", "4"]) == 0
     assert seen["groups"] and not any(is_heldout(g) for g in seen["groups"])
+
+
+def test_hard_and_soft_targets():
+    from opensysone.train.examples import _target
+
+    dist = {"a": 0.6, "b": 0.4}
+    assert _target(dist, "a", "hard") == {"a": 1.0}
+    assert _target(dist, "a", "soft") == {"a": 0.6, "b": 0.4}
+    assert _target(None, True, "soft") == {"true": 1.0}
