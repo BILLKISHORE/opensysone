@@ -43,15 +43,15 @@ def _option_id(choice: Any) -> str:
     return str(choice)
 
 
-def _target(dist: dict[str, float] | None, label: Any) -> dict[str, float]:
-    if dist:
+def _target(dist: dict[str, float] | None, label: Any, labels: str = "hard") -> dict[str, float]:
+    if dist and labels == "soft":
         z = sum(dist.values())
         return {str(k): float(v) / z for k, v in dist.items()}
     return {_option_id(label): 1.0}
 
 
 def build_case(case: dict[str, Any], tokenizer, stats: Counter | None = None,
-               cache: dict | None = None) -> CaseExample | None:
+               cache: dict | None = None, labels: str = "hard") -> CaseExample | None:
     """`cache` keeps the compiled rows per question set and the chat profile: both depend only on the
     questions and the tokenizer, and compiling them is most of the cost."""
     from jevmlx.engine import PROMPT_V2_SYSTEM, _build_schema_rows, _chat_ids, _resolve_profile, _user_content
@@ -83,7 +83,7 @@ def build_case(case: dict[str, Any], tokenizer, stats: Counter | None = None,
         position, allowed = built["row_decision"][ridx]
         node = built["tries"][qid][built["row_branch"][ridx]]
         choices = [_option_id(c) for c in built["field_plans"][qid]["choices"]]
-        target = _target((case.get("label_distributions") or {}).get(qid), case["labels"][qid])
+        target = _target((case.get("label_distributions") or {}).get(qid), case["labels"][qid], labels)
         mass = [sum(target.get(choices[ci], 0.0) for ci in node["children"][tok]) for tok in allowed]
         if abs(sum(mass) - 1.0) > 1e-6:
             raise ValueError(f"{case['id']}/{qid}: label options {sorted(target)} do not match {choices}")
@@ -95,8 +95,12 @@ def build_case(case: dict[str, Any], tokenizer, stats: Counter | None = None,
     return CaseExample(case["id"], case.get("group_id", case["id"]), tuple(prompt), tuple(fields))
 
 
-def build_examples(cases: Iterable[dict[str, Any]], tokenizer) -> tuple[list[CaseExample], Counter]:
+def build_examples(cases: Iterable[dict[str, Any]], tokenizer, labels: str = "hard") -> tuple[list[CaseExample], Counter]:
+    """`labels="hard"` trains toward the winning label (what accuracy-based scores reward); `"soft"` toward
+    the vote shares, which leaves the model less confident than its accuracy."""
+    if labels not in ("hard", "soft"):
+        raise ValueError(f"labels must be hard or soft, got {labels!r}")
     stats: Counter = Counter()
     cache: dict = {}
-    out = [ex for c in cases if (ex := build_case(c, tokenizer, stats, cache)) is not None]
+    out = [ex for c in cases if (ex := build_case(c, tokenizer, stats, cache, labels)) is not None]
     return out, stats
