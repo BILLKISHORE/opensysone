@@ -96,19 +96,22 @@ def _used_maps(maps: dict[str, DirichletMap], kinds: Iterable[str], records: lis
 
 
 def fit_calibrator(records: list[DecisionRecord], *, meta: dict[str, Any] | None = None, seed: int = 0,
-                   target: str = "hard") -> FitResult:
+                   target: str = "hard", split_salt: str = "") -> FitResult:
     """`target="hard"` fits and selects against the winning label, which is what accuracy-based calibration
     error measures. `"soft"` fits to vote shares: closer to how labelers disagree, but less confident than
-    the winner-based scores reward."""
+    the winner-based scores reward.
+
+    `split_salt` picks the fit/held-out split of cases. Change it when every record already comes from
+    one held-out pool, such as the cases a LoRA adapter was not trained on."""
     if target not in TARGETS:
         raise ValueError(f"unknown target {target!r}; expected one of {TARGETS}")
     if target == "hard":
         records = [dataclasses.replace(r, label_distribution=None) for r in records]
-    meta = {**(meta or {}), "target": target}
+    meta = {**(meta or {}), "target": target, "split_salt": split_salt}
     by_kind: dict[str, list[DecisionRecord]] = defaultdict(list)
     for r in records:
         by_kind[r.kind].append(r)
-    train_all = [r for r in records if not is_heldout(r.group_id)]
+    train_all = [r for r in records if not is_heldout(r.group_id, salt=split_salt)]
     head = None
     fit_train = [r for r in train_all if not is_heldout(r.group_id, salt="inner")]
     fit_val = [r for r in train_all if is_heldout(r.group_id, salt="inner")]
@@ -121,8 +124,8 @@ def fit_calibrator(records: list[DecisionRecord], *, meta: dict[str, Any] | None
     kinds: dict[str, KindCalibration] = {}
     summary: dict[str, Any] = {}
     for kind, recs in sorted(by_kind.items()):
-        train = [r for r in recs if not is_heldout(r.group_id)]
-        held = [r for r in recs if is_heldout(r.group_id)]
+        train = [r for r in recs if not is_heldout(r.group_id, salt=split_salt)]
+        held = [r for r in recs if is_heldout(r.group_id, salt=split_salt)]
         raw = [list(r.probs) for r in held]
         if not train or not held:
             kinds[kind] = KindCalibration("identity", metrics={"note": "not enough data to hold out"})
