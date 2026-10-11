@@ -40,7 +40,11 @@ class DecisionRecord:
 
 
 def question_signature(kind: str, instructions: Any, options: Iterable[str]) -> str:
-    """A short stable id for one question: its type, its instructions and its options in prompt order."""
+    """A short stable id for one question: its type, its instructions and its options in prompt order.
+
+    Option and level descriptions are not part of it, so two questions that differ only in those
+    descriptions share one per-question calibration map.
+    """
     text = instructions if isinstance(instructions, str) or instructions is None else \
         json.dumps(instructions, ensure_ascii=False, sort_keys=True)
     body = json.dumps([kind, text or "", list(options)], ensure_ascii=False)
