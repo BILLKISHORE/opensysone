@@ -21,7 +21,11 @@ STYLE = """
 """
 
 
-def evaluate(records: Sequence[DecisionRecord], calibrator: Any = None) -> dict[str, dict[str, Any]]:
+def evaluate(records: Sequence[DecisionRecord], calibrator: Any = None,
+             probs: Sequence[Sequence[float]] | None = None) -> dict[str, dict[str, Any]]:
+    """Raw against calibrated metrics per question type. Calibrated comes from `calibrator`, or from
+    `probs` aligned with `records` (for example cross-fitted probabilities)."""
+    given = {id(r): list(p) for r, p in zip(records, probs)} if probs is not None else None
     by_kind: dict[str, list[DecisionRecord]] = defaultdict(list)
     for r in records:
         by_kind[r.kind].append(r)
@@ -29,7 +33,11 @@ def evaluate(records: Sequence[DecisionRecord], calibrator: Any = None) -> dict[
     all_raw, all_cal = [], []
     for kind, recs in sorted(by_kind.items()):
         raw = [list(r.probs) for r in recs]
-        cal = [calibrator.apply(kind, r.probs, r.prompt_tokens, signature=r.signature) if calibrator else list(r.probs) for r in recs]
+        if given is not None:
+            cal = [given[id(r)] for r in recs]
+        else:
+            cal = [calibrator.apply(kind, r.probs, r.prompt_tokens, signature=r.signature) if calibrator
+                   else list(r.probs) for r in recs]
         out[kind] = {"raw": summarize(recs, raw), "calibrated": summarize(recs, cal)}
         all_raw += raw
         all_cal += cal
