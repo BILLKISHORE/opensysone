@@ -67,3 +67,12 @@ def test_data_command_writes_cases(tmp_path, monkeypatch):
     out = tmp_path / "cases.jsonl"
     assert cli.main(["data", "typed-decisions", "--split", "test", "--out", str(out), "--limit", "1"]) == 0
     assert out.read_text().count("\n") == 1
+
+
+def test_crossfit_command_writes_a_report(tmp_path, capsys):
+    d = tmp_path / "dec.jsonl"
+    _write_decisions(d, n=400)
+    assert cli.main(["crossfit", str(d), "--out", str(tmp_path / "x"), "--folds", "4"]) == 0
+    metrics = json.loads((tmp_path / "x" / "metrics.json").read_text())
+    assert metrics["all"]["calibrated"]["ece"] < metrics["all"]["raw"]["ece"]
+    assert "cross-fitted" in (tmp_path / "x" / "report.md").read_text()
