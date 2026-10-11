@@ -136,8 +136,10 @@ def cmd_lora(args) -> int:
     engine = Engine(args.model, parity_check=False)
     engine.load()
     examples, stats = build_examples(cases, engine._tokenizer)
-    train_ex = [e for e in examples if not is_heldout(e.group_id)]
-    val_ex = [e for e in examples if is_heldout(e.group_id)][: args.val_cases]
+    # The outer held-out groups are the calibration fit's test set; checkpoint selection must not see them.
+    pool = [e for e in examples if not is_heldout(e.group_id)]
+    train_ex = [e for e in pool if not is_heldout(e.group_id, salt="inner")]
+    val_ex = [e for e in pool if is_heldout(e.group_id, salt="inner")][: args.val_cases]
     cfg = LoraConfig(layers=args.layers, rank=args.rank, scale=args.scale, lr=args.lr, epochs=args.epochs,
                      warmup=args.warmup, eval_every=args.eval_every, seed=args.seed)
     print(f"examples {dict(stats)}; train {len(train_ex)} cases, val {len(val_ex)} cases", flush=True)
