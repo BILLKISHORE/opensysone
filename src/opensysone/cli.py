@@ -13,7 +13,7 @@ from .calib.calibrators import Calibrator
 from .calib.collect import collect as run_collect
 from .calib.data import TD_REVISION, typed_decisions_cases
 from .calib.fit import fit_calibrator
-from .calib.records import CALIBRATED_KINDS, is_heldout, load_decisions, read_jsonl
+from .calib.records import CALIBRATED_KINDS, load_decisions, read_jsonl
 from .calib.store import OutcomeStore
 from .calib.report import evaluate, render_report
 from .engine import Engine
@@ -128,6 +128,7 @@ def build_examples(cases, tokenizer, labels="hard"):
 
 def cmd_lora(args) -> int:
     """Train a LoRA adapter on labeled cases; validation is the held-out share of the training cases."""
+    from .train.examples import split_train_val
     from .train.lora import LoraConfig, attach_lora, save_adapter, train
 
     cases = list(read_jsonl(args.cases))
@@ -137,9 +138,7 @@ def cmd_lora(args) -> int:
     engine.load()
     examples, stats = build_examples(cases, engine._tokenizer, args.labels)
     # The outer held-out groups are the calibration fit's test set; checkpoint selection must not see them.
-    pool = [e for e in examples if not is_heldout(e.group_id)]
-    train_ex = [e for e in pool if not is_heldout(e.group_id, salt="inner")]
-    val_ex = [e for e in pool if is_heldout(e.group_id, salt="inner")][: args.val_cases]
+    train_ex, val_ex = split_train_val(examples, args.val_cases)
     cfg = LoraConfig(layers=args.layers, rank=args.rank, scale=args.scale, lr=args.lr, epochs=args.epochs,
                      warmup=args.warmup, eval_every=args.eval_every, seed=args.seed)
     print(f"examples {dict(stats)}; train {len(train_ex)} cases, val {len(val_ex)} cases", flush=True)
