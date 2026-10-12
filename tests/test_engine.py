@@ -86,7 +86,7 @@ def test_parity_failure_forces_one_row_per_pass(monkeypatch):
 
 
 def test_decide_returns_jev_shape_with_extensions(engine):
-    out = engine.decide(_req())
+    out = engine.decide(_req(samples=1))
     assert out["model"] == engine_mod.MODEL_VERSION
     assert out["usage"] == {"input_tokens": 42, "output_tokens": 0}
     assert out["cached"] is False
@@ -100,16 +100,16 @@ def test_decide_returns_jev_shape_with_extensions(engine):
 
 
 def test_cache_hit_on_second_call(engine):
-    first = engine.decide(_req())
-    second = engine.decide(_req())
+    first = engine.decide(_req(samples=1))
+    second = engine.decide(_req(samples=1))
     assert second["cached"] is True
     assert second["answers"] == first["answers"]
     assert len(engine._runs.calls) == 1
 
 
 def test_cache_can_be_bypassed(engine):
-    engine.decide(_req())
-    engine.decide(_req(cache=False))
+    engine.decide(_req(samples=1))
+    engine.decide(_req(samples=1, cache=False))
     assert len(engine._runs.calls) == 2
 
 
@@ -168,7 +168,7 @@ class Sharpen:
 
 
 def test_raw_distributions_are_exposed_before_calibration(engine):
-    out = engine.decide(_req())
+    out = engine.decide(_req(samples=1))
     raw = out[engine_mod.RAW_KEY]
     assert raw["prompt_tokens"] == 42
     team = raw["questions"]["team"]
@@ -177,9 +177,9 @@ def test_raw_distributions_are_exposed_before_calibration(engine):
 
 
 def test_calibrator_changes_confidence_not_winner_and_stamp(engine):
-    before = engine.decide(_req(cache=False))["answers"]["team"]["probabilities"]["outage"]
+    before = engine.decide(_req(samples=1, cache=False))["answers"]["team"]["probabilities"]["outage"]
     engine.set_calibrator(Sharpen())
-    out = engine.decide(_req())
+    out = engine.decide(_req(samples=1))
     assert out["stamp"]["calibration"] == "cafe"
     assert out["answers"]["team"]["choice"] == "outage"
     assert out["answers"]["team"]["probabilities"]["outage"] > before
@@ -272,6 +272,28 @@ def test_every_sample_reads_all_questions_and_only_choice_rotates(engine):
     assert _choices_of(second["schema"], "team") == ["billing", "outage"]
     assert _choices_of(second["schema"], "tone") == _choices_of(first["schema"], "tone")
     assert out["answers"]["team"]["probabilities"]["outage"] == pytest.approx(0.5)
+
+
+def test_two_option_choice_defaults_to_both_orders(engine):
+    out = engine.decide(_req(cache=False))
+    assert len(engine._runs.calls) == 2
+    assert out["timing"]["samples"] == 2
+    assert out["answers"]["team"]["probabilities"]["outage"] == pytest.approx(0.5)
+
+
+def test_explicit_samples_one_keeps_a_single_pass(engine):
+    out = engine.decide(_req(samples=1, cache=False))
+    assert len(engine._runs.calls) == 1
+    assert out["timing"]["samples"] == 1
+
+
+def test_default_is_one_pass_without_a_two_option_choice(engine):
+    three = {"type": "choice", "instructions": "Which team?", "criteria": {"a": "x", "b": "y", "c": "z"}}
+    req = SystemOneRequest.model_validate({"state": "x", "cache": False,
+                                           "questions": {"urgent": QUESTIONS["urgent"], "team": three}})
+    out = engine.decide(req)
+    assert len(engine._runs.calls) == 1
+    assert out["timing"]["samples"] == 1
 
 
 def test_samples_stop_early_when_nothing_can_rotate(engine):

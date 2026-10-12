@@ -76,6 +76,12 @@ def _structured(schema_dict: dict[str, dict[str, Any]]):
     return StructuredSchema(schema_dict)
 
 
+def default_samples(plans: dict[str, Any]) -> int:
+    """Two passes when a choice question has exactly two options, else one. The second pass swaps the pair,
+    which cancels the backbone's lean toward the second option (alphaNLI: picks second 88% -> 61%)."""
+    return 2 if any(p.kind == "choice" and len(p.options) == 2 for p in plans.values()) else 1
+
+
 class Engine:
     def __init__(
         self,
@@ -136,8 +142,9 @@ class Engine:
         if req.strict and warnings:
             raise SchemaError(["body", "questions"], "; ".join(warnings))
         ruled = apply_rules(req, compiled.plans)
+        samples = req.samples or default_samples({q: p for q, p in compiled.plans.items() if q not in ruled})
         options = {
-            "samples": req.samples,
+            "samples": samples,
             "prior_correction": req.prior_correction,
             "scoring": self.scoring,
             "max_rows": self.max_rows,
@@ -161,7 +168,7 @@ class Engine:
         if pending:
             seed = int(key[:8], 16)
             per_sample: list[dict[str, list[float]]] = []
-            for s in range(req.samples):
+            for s in range(samples):
                 # Every sample reads the full schema, so all samples answer the same prompt with only the
                 # choice order rotated. Rotation cancels a position preference fully when samples is a
                 # multiple of the option count.
@@ -211,7 +218,7 @@ class Engine:
             "timing": {
                 **timing,
                 "wall_ms": (time.perf_counter() - t0) * 1000.0,
-                "samples": req.samples,
+                "samples": samples,
                 "max_rows": self.max_rows,
             },
             RAW_KEY: {"prompt_tokens": input_tokens, "questions": raw},
