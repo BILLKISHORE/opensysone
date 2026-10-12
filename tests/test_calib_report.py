@@ -59,3 +59,12 @@ def test_render_report_shows_both_accuracies_and_intervals():
     md, _ = render_report(ev, title="t", note="n")
     assert "Accuracy calibrated" in md and "ECE equal-mass" in md
     assert "95% interval" in md
+
+
+def test_report_names_both_nlls_and_gives_the_winner_nll_an_interval():
+    ev = evaluate(_recs(), Calibrator({"choice": KindCalibration("temperature", 5.0)}))
+    lo, hi = ev["all"]["ci_raw"]["nll_winner"]
+    assert lo <= ev["all"]["raw"]["nll_winner"] <= hi
+    md, _ = render_report(ev, title="t", note="n")
+    assert "NLL winner raw" in md and "NLL vote shares raw" in md
+    assert "| | Accuracy | ECE | NLL winner |" in md

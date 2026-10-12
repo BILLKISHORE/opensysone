@@ -1,12 +1,13 @@
 """Calibration report: metrics per question type, reliability table and SVG diagram."""
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 from xml.sax.saxutils import escape
 
-from .metrics import bootstrap_ci, ece, soft_nll, summarize
+from .metrics import EPS, bootstrap_ci, ece, soft_nll, summarize
 from .records import DecisionRecord
 
 W, H = 480, 360
@@ -53,11 +54,13 @@ def intervals(records: Sequence[DecisionRecord], probs_list: Sequence[Sequence[f
     conf = [float(p[t]) for p, t in zip(probs_list, top)]
     hit = [t == r.label_index for r, t in zip(records, top)]
     nll = [soft_nll(p, r.target()) for r, p in zip(records, probs_list)]
+    winner = [-math.log(max(p[r.label_index], EPS)) for r, p in zip(records, probs_list)]
     case = [r.id.rsplit("/", 1)[0] if "/" in r.id else r.group_id for r in records]
     return {
         "accuracy": list(bootstrap_ci(case, lambda ix: sum(hit[i] for i in ix) / len(ix))),
         "ece": list(bootstrap_ci(case, lambda ix: ece([conf[i] for i in ix], [hit[i] for i in ix]))),
         "nll": list(bootstrap_ci(case, lambda ix: sum(nll[i] for i in ix) / len(ix))),
+        "nll_winner": list(bootstrap_ci(case, lambda ix: sum(winner[i] for i in ix) / len(ix))),
     }
 
 
@@ -141,21 +144,22 @@ def _fmt(v: Any) -> str:
 def render_report(evaluation: dict[str, dict[str, Any]], *, title: str, note: str) -> tuple[str, dict[str, str]]:
     lines = [f"# {title}", "", note, "",
              "| Question type | n | Accuracy raw | Accuracy calibrated | ECE raw | ECE calibrated "
-             "| ECE equal-mass raw | ECE equal-mass calibrated | NLL raw | NLL calibrated "
-             "| Brier raw | Brier calibrated |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| ECE equal-mass raw | ECE equal-mass calibrated | NLL winner raw | NLL winner calibrated "
+             "| NLL vote shares raw | NLL vote shares calibrated | Brier raw | Brier calibrated |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for kind, ev in evaluation.items():
         r, c = ev["raw"], ev["calibrated"]
         lines.append(f"| {kind} | {r['n']} | {_fmt(r['accuracy'])} | {_fmt(c['accuracy'])} | {_fmt(r['ece'])} | "
                      f"{_fmt(c['ece'])} | {_fmt(r['ece_em15'])} | {_fmt(c['ece_em15'])} | "
+                     f"{_fmt(r['nll_winner'])} | {_fmt(c['nll_winner'])} | "
                      f"{_fmt(r['nll'])} | {_fmt(c['nll'])} | {_fmt(r['brier'])} | {_fmt(c['brier'])} |")
     if "ci_raw" in evaluation.get("all", {}):
         lines += ["", "95% interval over all questions, resampling whole cases:", "",
-                  "| | Accuracy | ECE | NLL |", "|---|---|---|---|"]
+                  "| | Accuracy | ECE | NLL winner |", "|---|---|---|---|"]
         for side in ("raw", "calibrated"):
             ci = evaluation["all"][f"ci_{side}"]
             lines.append(f"| {side} | " + " | ".join(f"{_fmt(ci[m][0])} to {_fmt(ci[m][1])}"
-                                                    for m in ("accuracy", "ece", "nll")) + " |")
+                                                    for m in ("accuracy", "ece", "nll_winner")) + " |")
     files: dict[str, str] = {}
     for kind, ev in evaluation.items():
         name = f"reliability-{kind}.svg"
