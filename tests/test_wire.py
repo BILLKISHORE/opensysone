@@ -24,7 +24,7 @@ def _req(**kw):
 def test_minimal_jev_request_parses_with_defaults():
     req = _req()
     assert req.model == "opensysone-latest"
-    assert req.samples == 1
+    assert req.samples is None  # the engine picks 1 or 2, see default_samples
     assert req.prior_correction is False
     assert req.cache is True
     assert req.questions["billing"].type == "noul"

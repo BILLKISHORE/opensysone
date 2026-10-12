@@ -97,7 +97,7 @@ class SystemOneRequest(BaseModel):
     state: JSONContent
     questions: dict[str, Question] = Field(min_length=1, max_length=MAX_QUESTIONS)
     constraints: list[dict[str, Any]] | None = None
-    samples: int = Field(default=1, ge=1, le=MAX_SAMPLES)
+    samples: int | None = Field(default=None, ge=1, le=MAX_SAMPLES)  # None: see default_samples
     prior_correction: bool = False
     rules: list[Rule] | None = None
     strict: bool = False
