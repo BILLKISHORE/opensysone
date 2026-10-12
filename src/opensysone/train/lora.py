@@ -99,13 +99,14 @@ def _lr(step: int, total: int, cfg: LoraConfig) -> float:
 
 
 def train(model, train_ex: Sequence[CaseExample], val_ex: Sequence[CaseExample], cfg: LoraConfig,
-          log: Callable[[str], None] = print) -> dict:
+          log: Callable[[str], None] = print, on_best: Callable[[int, float], None] | None = None) -> dict:
     """Train attached LoRA weights; keep the weights with the lowest validation loss.
 
     Each step prefills the prompt in eval mode (see `prefill`), then scores the question rows in train
     mode, where Qwen3.5 linear-attention layers use the plain ops path that has gradients. The gradient is
     truncated at the prompt: the adapter learns from how each question is answered over the case, not from
-    re-reading the case. Validation and the returned model are in eval mode.
+    re-reading the case. Validation and the returned model are in eval mode. `on_best(step, val_loss)` runs
+    with the model holding the new best weights, so a caller can write them before training ends.
     """
     rng = random.Random(cfg.seed)
     total = cfg.epochs * len(train_ex)
@@ -137,6 +138,8 @@ def train(model, train_ex: Sequence[CaseExample], val_ex: Sequence[CaseExample],
                 running = []
                 if val < best_val:
                     best_val, best = val, dict(tree_flatten(model.trainable_parameters()))
+                    if on_best is not None:
+                        on_best(step, val)
     model.update(tree_unflatten(list(best.items())))
     model.eval()
     mx.eval(model.trainable_parameters())
