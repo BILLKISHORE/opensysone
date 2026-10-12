@@ -144,7 +144,12 @@ def cmd_lora(args) -> int:
                      warmup=args.warmup, eval_every=args.eval_every, seed=args.seed)
     print(f"examples {dict(stats)}; train {len(train_ex)} cases, val {len(val_ex)} cases", flush=True)
     attach_lora(engine._model, cfg)
-    result = train(engine._model, train_ex, val_ex, cfg, log=lambda m: print(m, flush=True))
+    def keep_best(step: int, val: float) -> None:
+        sha = save_adapter(engine._model, args.out, cfg, meta={"backbone": args.model, "cases": str(args.cases),
+                                                                "step": step, "val_loss": val, "partial": True})
+        print(f"best so far written: step {step} val_loss {val:.4f} adapter {sha}", flush=True)
+
+    result = train(engine._model, train_ex, val_ex, cfg, log=lambda m: print(m, flush=True), on_best=keep_best)
     sha = save_adapter(engine._model, args.out, cfg, meta={
         "backbone": args.model, "cases": str(args.cases), "n_train_cases": len(train_ex),
         "n_val_cases": len(val_ex), **result})
