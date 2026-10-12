@@ -13,7 +13,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from ..calib.records import CALIBRATED_KINDS
+from ..calib.records import CALIBRATED_KINDS, is_heldout
 from ..schema import compile_request
 from ..wire import SystemOneRequest
 
@@ -106,3 +106,24 @@ def build_examples(cases: Iterable[dict[str, Any]], tokenizer, labels: str = "ha
     cache: dict = {}
     out = [ex for c in cases if (ex := build_case(c, tokenizer, stats, cache, labels)) is not None]
     return out, stats
+
+
+def split_train_val(examples: list[CaseExample], val_cases: int) -> tuple[list[CaseExample], list[CaseExample]]:
+    """Train and validation cases from everything outside the outer held-out groups (the calibration test set).
+
+    Validation takes whole inner held-out groups until it has `val_cases` cases; every other case trains,
+    so no case is dropped and no group sits on both sides.
+    """
+    pool = [e for e in examples if not is_heldout(e.group_id)]
+    train = [e for e in pool if not is_heldout(e.group_id, salt="inner")]
+    val: list[CaseExample] = []
+    val_groups: set[str] = set()
+    for e in pool:
+        if not is_heldout(e.group_id, salt="inner"):
+            continue
+        if e.group_id in val_groups or len(val) < val_cases:
+            val_groups.add(e.group_id)
+            val.append(e)
+        else:
+            train.append(e)
+    return train, val
