@@ -35,9 +35,9 @@ whole cases.
 
 The adapter trains the last 16 blocks at rank 8 on 765 of the 1,200 training
 cases (winner labels, 2 epochs, best checkpoint on 60 validation cases; 240
-more are held out for calibration). It takes about 3 hours on the Mac: a
-training step is 2.7 s per case, and validation every 100 steps brings the
-average to 6.5 s. Peak memory is 17 GB. It lifts choice
+more are held out for calibration). This run took about 3 hours on the Mac,
+averaging 6.5 s per step with validation and other jobs sharing the GPU; a
+bare training step measures 2.7 s per case. Peak memory is 17 GB. It lifts choice
 questions from 59.5% to 73.2% and score questions from 63.5% to 72.6%.
 Calibration fits one Dirichlet map per question type on the backbone's
 answers to the 1,200 training cases. It does more than rescale confidence: it
