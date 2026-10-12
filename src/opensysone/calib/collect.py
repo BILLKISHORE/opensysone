@@ -22,7 +22,7 @@ def collect(
     cases: Iterable[dict[str, Any]],
     out_path: str | Path,
     *,
-    samples: int = 1,
+    samples: int | None = None,
     log: Callable[[str], None] | None = None,
 ) -> dict[str, int]:
     out_path = Path(out_path)
