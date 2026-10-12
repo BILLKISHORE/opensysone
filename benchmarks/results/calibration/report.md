@@ -2,19 +2,19 @@
 
 Labels in typed-decisions are frontier-model consensus, not human gold. A calibrated probability here is the chance the consensus agrees.
 
-| Question type | n | Accuracy raw | Accuracy calibrated | ECE raw | ECE calibrated | ECE equal-mass raw | ECE equal-mass calibrated | NLL raw | NLL calibrated | Brier raw | Brier calibrated |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| choice | 600 | 0.595 | 0.740 | 0.097 | 0.051 | 0.100 | 0.059 | 1.253 | 1.325 | 0.175 | 0.134 |
-| noul | 600 | 0.810 | 0.832 | 0.147 | 0.020 | 0.149 | 0.033 | 0.565 | 0.612 | 0.080 | 0.081 |
-| score | 800 | 0.635 | 0.724 | 0.045 | 0.047 | 0.058 | 0.060 | 1.222 | 1.673 | 0.132 | 0.160 |
-| all | 2000 | 0.675 | 0.761 | 0.079 | 0.030 | 0.079 | 0.037 | 1.034 | 1.250 | 0.129 | 0.129 |
+| Question type | n | Accuracy raw | Accuracy calibrated | ECE raw | ECE calibrated | ECE equal-mass raw | ECE equal-mass calibrated | NLL winner raw | NLL winner calibrated | NLL vote shares raw | NLL vote shares calibrated | Brier raw | Brier calibrated |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| choice | 600 | 0.595 | 0.740 | 0.097 | 0.051 | 0.100 | 0.059 | 1.084 | 0.627 | 1.253 | 1.325 | 0.175 | 0.134 |
+| noul | 600 | 0.810 | 0.832 | 0.147 | 0.020 | 0.149 | 0.033 | 0.494 | 0.351 | 0.565 | 0.612 | 0.080 | 0.081 |
+| score | 800 | 0.635 | 0.724 | 0.045 | 0.047 | 0.058 | 0.060 | 0.888 | 0.620 | 1.222 | 1.673 | 0.132 | 0.160 |
+| all | 2000 | 0.675 | 0.761 | 0.079 | 0.030 | 0.079 | 0.037 | 0.828 | 0.541 | 1.034 | 1.250 | 0.129 | 0.129 |
 
 95% interval over all questions, resampling whole cases:
 
-| | Accuracy | ECE | NLL |
+| | Accuracy | ECE | NLL winner |
 |---|---|---|---|
-| raw | 0.653 to 0.699 | 0.063 to 0.099 | 1.012 to 1.057 |
-| calibrated | 0.740 to 0.783 | 0.020 to 0.049 | 1.213 to 1.292 |
+| raw | 0.653 to 0.699 | 0.063 to 0.099 | 0.796 to 0.861 |
+| calibrated | 0.740 to 0.783 | 0.020 to 0.049 | 0.502 to 0.579 |
 
 ## choice
 
