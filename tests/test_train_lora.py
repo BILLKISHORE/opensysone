@@ -156,7 +156,7 @@ def test_cli_lora_never_validates_on_outer_heldout_groups(tmp_path, monkeypatch)
     examples = [_case(i, True) for i in range(60)]
     monkeypatch.setattr(cli, "build_examples", lambda cases, tok, labels="hard": (examples, Counter()))
 
-    def fake_train(model, train_ex, val_ex, cfg, log):
+    def fake_train(model, train_ex, val_ex, cfg, log, on_best=None):
         seen["groups"] = [e.group_id for e in [*train_ex, *val_ex]]
         return {"best_val_loss": 0.0, "history": []}
 
@@ -193,3 +193,14 @@ def test_train_steps_run_in_training_mode_and_leave_eval_mode(monkeypatch):
     train(model, [_case(i, True) for i in range(4)], [_case(9, True)], cfg, log=lambda s: None)
     assert True in modes and False in modes  # training steps in train mode, validation in eval mode
     assert model.training is False
+
+
+def test_train_reports_each_new_best_so_it_can_be_saved_early():
+    model = _tiny()
+    cfg = LoraConfig(layers=2, rank=4, scale=10.0, lr=5e-3, epochs=4, warmup=1, eval_every=4)
+    attach_lora(model, cfg)
+    bests = []
+    data = [_case(i, True) for i in range(4)]
+    result = train(model, data, data[:2], cfg, log=lambda s: None, on_best=lambda step, val: bests.append(val))
+    assert bests and bests == sorted(bests, reverse=True)
+    assert bests[-1] == pytest.approx(result["best_val_loss"])
