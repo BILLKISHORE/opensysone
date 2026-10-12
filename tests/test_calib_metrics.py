@@ -79,3 +79,11 @@ def test_summarize_reports_robust_calibration_errors():
     recs = [_rec([0.9, 0.1], 0), _rec([0.6, 0.4], 1)]
     s = summarize(recs, [r.probs for r in recs])
     assert {"ece_em15", "ece_sweep", "option_ece"} <= s.keys()
+
+
+def test_summarize_reports_winner_nll_beside_vote_share_nll():
+    recs = [_rec([0.8, 0.2], 0, dist=(0.5, 0.5))]
+    s = summarize(recs, [recs[0].probs])
+    assert s["nll_winner"] == pytest.approx(-math.log(0.8))
+    assert s["nll"] == pytest.approx(-0.5 * math.log(0.8) - 0.5 * math.log(0.2))
+    assert summarize([], [])["nll_winner"] is None

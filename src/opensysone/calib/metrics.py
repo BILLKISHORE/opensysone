@@ -124,22 +124,25 @@ def bootstrap_ci(groups: Sequence[str], metric: Callable[[list[int]], float], *,
 def summarize(records: Sequence[DecisionRecord], probs_list: Sequence[Sequence[float]]) -> dict[str, Any]:
     n = len(records)
     if n == 0:
-        return {"n": 0, "accuracy": None, "nll": None, "brier": None, "ece": None, "ece_em15": None,
+        return {"n": 0, "accuracy": None, "nll": None, "nll_winner": None, "brier": None, "ece": None,
+                "ece_em15": None,
                 "ece_sweep": None, "option_ece": None, "mean_tvd": None, "reliability": []}
-    conf, correct, nlls, briers, tvds = [], [], [], [], []
+    conf, correct, nlls, winner_nlls, briers, tvds = [], [], [], [], [], []
     for rec, probs in zip(records, probs_list):
         top = max(range(len(probs)), key=lambda i: probs[i])
         conf.append(float(probs[top]))
         correct.append(top == rec.label_index)
         target = rec.target()
         nlls.append(soft_nll(probs, target))
+        winner_nlls.append(-math.log(max(probs[rec.label_index], EPS)))
         briers.append(brier(probs, target))
         if rec.label_distribution is not None:
             tvds.append(tvd(probs, rec.label_distribution))
     return {
         "n": n,
         "accuracy": sum(correct) / n,
-        "nll": sum(nlls) / n,
+        "nll": sum(nlls) / n,  # against vote shares when the record has them
+        "nll_winner": sum(winner_nlls) / n,
         "brier": sum(briers) / n,
         "ece": ece(conf, correct),
         "ece_em15": ece_equal_mass(conf, correct),
