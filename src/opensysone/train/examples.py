@@ -76,20 +76,22 @@ def build_case(case: dict[str, Any], tokenizer, stats: Counter | None = None,
         if plan.kind not in CALIBRATED_KINDS or qid not in case.get("labels", {}):
             stats["skipped_unlabeled_or_kind"] += 1
             continue
-        rows = [i for i, f in enumerate(built["row_field"]) if f == qid]
-        if len(rows) != 1:  # multi-token codes need several branch rows; not trained here
-            stats["skipped_multi_row"] += 1
-            continue
-        ridx = rows[0]
-        position, allowed = built["row_decision"][ridx]
-        node = built["tries"][qid][built["row_branch"][ridx]]
         choices = [_option_id(c) for c in built["field_plans"][qid]["choices"]]
         target = _target((case.get("label_distributions") or {}).get(qid), case["labels"][qid], labels)
-        mass = [sum(target.get(choices[ci], 0.0) for ci in node["children"][tok]) for tok in allowed]
-        if abs(sum(mass) - 1.0) > 1e-6:
-            raise ValueError(f"{case['id']}/{qid}: label options {sorted(target)} do not match {choices}")
-        names = tuple("+".join(choices[ci] for ci in node["children"][tok]) for tok in allowed)
-        fields.append(FieldExample(qid, tuple(built["rows"][ridx]), int(position), tuple(allowed), tuple(mass), names))
+        # Multi-token codes span a root row and one row per prefix. Each row's target is the label mass under
+        # each of its tokens, so a prefix row carries only its branch's share, and the rows' cross-entropies
+        # add up to the full option's: -log P(o) = -log p(prefix) - log p(rest | prefix).
+        for ridx in (i for i, f in enumerate(built["row_field"]) if f == qid):
+            position, allowed = built["row_decision"][ridx]
+            node = built["tries"][qid][built["row_branch"][ridx]]
+            mass = [sum(target.get(choices[ci], 0.0) for ci in node["children"][tok]) for tok in allowed]
+            if not node["path"] and abs(sum(mass) - 1.0) > 1e-6:
+                raise ValueError(f"{case['id']}/{qid}: label options {sorted(target)} do not match {choices}")
+            if sum(mass) == 0.0:
+                continue  # a branch the label never reaches adds nothing to the loss
+            names = tuple("+".join(choices[ci] for ci in node["children"][tok]) for tok in allowed)
+            fields.append(FieldExample(qid, tuple(built["rows"][ridx]), int(position), tuple(allowed), tuple(mass),
+                                       names))
         stats["fields"] += 1
     if not fields:
         return None
