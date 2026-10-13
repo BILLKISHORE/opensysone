@@ -79,3 +79,29 @@ def test_lora_step_time_and_memory(engine):
     (DATA / "lora-live.json").write_text(json.dumps(report, indent=2))
     print(f"\nLoRA step: median {report['median']:.1f}s per case, peak memory {peak:.1f} GB, times {times}")
     assert peak < 44
+
+
+def test_multi_token_rows_give_the_served_probability_of_the_label(engine):
+    # 77- and 151-option intent questions need two-token codes. With a hard label the training loss is
+    # -log P(label), and P(label) must be what the engine serves: root probability times branch probability.
+    import math
+
+    from opensysone.train.examples import build_examples
+    from opensysone.train.lora import case_loss
+    from opensysone.wire import SystemOneRequest
+
+    cases = []
+    for name in ("banking77-test", "clinc150-test"):
+        rows = [json.loads(line) for line in open(DATA / "human-gold" / f"{name}-s500.cases.jsonl")]
+        cases += rows[:3]
+    examples, _ = build_examples(cases, engine._tokenizer)
+    assert any(len(ex.fields) > 1 for ex in examples)
+    worst = 0.0
+    for case, ex in zip(cases, examples):
+        req = SystemOneRequest.model_validate({"state": case["state"], "questions": case["questions"], "cache": False})
+        served = engine.decide(req)["_raw"]["questions"]["answer"]
+        theirs = dict(zip(served["options"], served["probs"]))[case["labels"]["answer"]]
+        mine = math.exp(-float(case_loss(engine._model, ex).item()))
+        worst = max(worst, abs(mine - theirs))
+    print(f"\nworst label probability difference, training rows vs served: {worst:.2e}")
+    assert worst < 1e-3
