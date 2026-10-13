@@ -204,3 +204,54 @@ def test_train_reports_each_new_best_so_it_can_be_saved_early():
     result = train(model, data, data[:2], cfg, log=lambda s: None, on_best=lambda step, val: bests.append(val))
     assert bests and bests == sorted(bests, reverse=True)
     assert bests[-1] == pytest.approx(result["best_val_loss"])
+
+
+def test_rows_of_one_question_add_up_to_the_full_option_loss():
+    # Options x (code 30), y (31 then 60), z (31 then 61). Root row masses sum to 1; the branch row carries
+    # only the mass under prefix 31, so the two rows together give -sum t(o) log P(o) with P = root * branch.
+    model = _tiny()
+    target = {"x": 0.5, "y": 0.3, "z": 0.2}
+    root = FieldExample("a", (20, 21, 22), 2, (30, 31), (0.5, 0.5))
+    branch = FieldExample("a", (20, 21, 22, 31), 3, (60, 61), (0.3, 0.2))
+    ex = CaseExample("c", "g", (5, 6, 7), (root, branch))
+
+    def logp(f):
+        z = model(mx.array(ex.prompt + f.row)[None])[0, len(ex.prompt) + f.position][mx.array(f.allowed)]
+        return [float(v) for v in (z - mx.logsumexp(z)).tolist()]
+
+    r, b = logp(root), logp(branch)
+    expected = -(target["x"] * r[0] + target["y"] * (r[1] + b[0]) + target["z"] * (r[1] + b[1]))
+    assert float(case_loss(model, ex).item()) == pytest.approx(expected, rel=1e-4)
+
+
+def test_build_case_trains_every_row_of_a_multi_token_code(monkeypatch):
+    import jevmlx.engine as je
+    import jevmlx.schema as js
+
+    from opensysone.train.examples import build_case
+
+    options = ["x", "y", "z", "v", "w"]
+    built = {
+        "row_field": ["answer", "answer", "answer"],
+        "row_branch": {0: 0, 1: 1, 2: 2},
+        "row_decision": [(2, [30, 31, 32]), (3, [60, 61]), (3, [70, 71])],
+        "rows": [(1, 2, 3), (1, 2, 3, 31), (1, 2, 3, 32)],
+        "tries": {"answer": [{"path": [], "children": {30: [0], 31: [1, 2], 32: [3, 4]}},
+                             {"path": [31], "children": {60: [1], 61: [2]}},
+                             {"path": [32], "children": {70: [3], 71: [4]}}]},
+        "field_plans": {"answer": {"choices": options}},
+    }
+    monkeypatch.setattr(js, "StructuredSchema", lambda d: d)
+    monkeypatch.setattr(je, "_build_schema_rows", lambda schema, tok, scoring: built)
+    monkeypatch.setattr(je, "_resolve_profile", lambda tok: None)
+    monkeypatch.setattr(je, "_user_content", lambda ctx, schema, tok, scoring: ctx)
+    monkeypatch.setattr(je, "_chat_ids", lambda tok, content, system, profile: [5, 6])
+    case = {"id": "c", "state": "s", "labels": {"answer": "z"},
+            "questions": {"answer": {"type": "choice", "instructions": "Which?", "criteria": {o: o for o in options}}}}
+    ex = build_case(case, tokenizer=None)
+    # Root row plus the branch under 31; the branch under 32 holds no label mass, so it is not trained.
+    assert [(f.row, f.allowed, f.target) for f in ex.fields] == [
+        ((1, 2, 3), (30, 31, 32), (0.0, 1.0, 0.0)),
+        ((1, 2, 3, 31), (60, 61), (0.0, 1.0)),
+    ]
+    assert [f.options for f in ex.fields] == [("x", "y+z", "v+w"), ("y", "z")]

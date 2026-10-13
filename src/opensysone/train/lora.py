@@ -65,7 +65,8 @@ def prefill(model, ex: CaseExample) -> list:
 
 
 def rows_loss(model, ex: CaseExample, cache: list) -> mx.array:
-    """Mean cross-entropy over the case's questions, each row scored on a copy of the prompt cache."""
+    """Mean cross-entropy over the case's questions, each row scored on a copy of the prompt cache. A question
+    with multi-token codes has several rows whose losses sum to its own, so the mean is over questions."""
     from jevmlx.engine import _broadcast_cache
 
     total = mx.array(0.0)
@@ -73,7 +74,7 @@ def rows_loss(model, ex: CaseExample, cache: list) -> mx.array:
         logits = model(mx.array(f.row)[None], cache=_broadcast_cache(cache, 1))[0, f.position]
         z = logits[mx.array(f.allowed)].astype(mx.float32)
         total = total - (mx.array(f.target) * (z - mx.logsumexp(z))).sum()
-    return total / len(ex.fields)
+    return total / len({f.qid for f in ex.fields})
 
 
 def case_loss(model, ex: CaseExample) -> mx.array:
