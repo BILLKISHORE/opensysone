@@ -30,22 +30,22 @@
 <text x="224.0" y="352" font-size="12" fill="var(--muted)" text-anchor="middle">mean confidence</text>
 <text x="14" y="184.0" font-size="12" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 14 184.0)">accuracy</text>
 <rect x="56" y="32" width="10" height="10" rx="2" fill="var(--s1)"/><text x="72" y="41" font-size="12" fill="var(--text2)">raw</text><rect x="116" y="32" width="10" height="10" rx="2" fill="var(--s2)"/><text x="132" y="41" font-size="12" fill="var(--text2)">calibrated</text>
-<polyline points="184.5,129.1 213.9,184.0 240.2,195.4 276.8,167.3 308.1,115.9 342.4,107.9 379.8,77.6" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="184.5" cy="129.1" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.3 to 0.4: n=7, mean confidence 0.38, accuracy 0.71</title></circle>
-<circle cx="213.9" cy="184.0" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.4 to 0.5: n=40, mean confidence 0.47, accuracy 0.50</title></circle>
-<circle cx="240.2" cy="195.4" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.5 to 0.6: n=101, mean confidence 0.55, accuracy 0.46</title></circle>
-<circle cx="276.8" cy="167.3" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.6 to 0.7: n=138, mean confidence 0.66, accuracy 0.57</title></circle>
-<circle cx="308.1" cy="115.9" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.7 to 0.8: n=141, mean confidence 0.75, accuracy 0.77</title></circle>
-<circle cx="342.4" cy="107.9" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.8 to 0.9: n=148, mean confidence 0.85, accuracy 0.80</title></circle>
-<circle cx="379.8" cy="77.6" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.9 to 1.0: n=225, mean confidence 0.96, accuracy 0.92</title></circle>
-<polyline points="184.5,129.1 213.9,184.0 240.2,195.4 276.8,167.3 308.1,115.9 342.4,107.9 379.8,77.6" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="184.5" cy="129.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.3 to 0.4: n=7, mean confidence 0.38, accuracy 0.71</title></circle>
-<circle cx="213.9" cy="184.0" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.4 to 0.5: n=40, mean confidence 0.47, accuracy 0.50</title></circle>
-<circle cx="240.2" cy="195.4" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.5 to 0.6: n=101, mean confidence 0.55, accuracy 0.46</title></circle>
-<circle cx="276.8" cy="167.3" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.6 to 0.7: n=138, mean confidence 0.66, accuracy 0.57</title></circle>
-<circle cx="308.1" cy="115.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.7 to 0.8: n=141, mean confidence 0.75, accuracy 0.77</title></circle>
-<circle cx="342.4" cy="107.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.8 to 0.9: n=148, mean confidence 0.85, accuracy 0.80</title></circle>
-<circle cx="379.8" cy="77.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.9 to 1.0: n=225, mean confidence 0.96, accuracy 0.92</title></circle>
-<text x="400.0" y="74.6" font-size="12" fill="var(--text2)">raw</text>
-<text x="400.0" y="88.6" font-size="12" fill="var(--text2)">calibrated</text>
+<polyline points="174.4,226.7 213.6,184.0 242.5,175.2 275.4,172.0 309.0,125.7 341.8,106.5 381.6,74.4" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="174.4" cy="226.7" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.3 to 0.4: n=3, mean confidence 0.35, accuracy 0.33</title></circle>
+<circle cx="213.6" cy="184.0" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.4 to 0.5: n=18, mean confidence 0.47, accuracy 0.50</title></circle>
+<circle cx="242.5" cy="175.2" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.5 to 0.6: n=116, mean confidence 0.55, accuracy 0.53</title></circle>
+<circle cx="275.4" cy="172.0" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.6 to 0.7: n=117, mean confidence 0.65, accuracy 0.55</title></circle>
+<circle cx="309.0" cy="125.7" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.7 to 0.8: n=158, mean confidence 0.75, accuracy 0.73</title></circle>
+<circle cx="341.8" cy="106.5" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.8 to 0.9: n=137, mean confidence 0.85, accuracy 0.80</title></circle>
+<circle cx="381.6" cy="74.4" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>raw, confidence 0.9 to 1.0: n=251, mean confidence 0.97, accuracy 0.93</title></circle>
+<polyline points="174.4,226.7 214.6,203.7 242.1,173.2 274.1,166.0 308.7,122.6 341.3,107.6 380.6,73.5" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="174.4" cy="226.7" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.3 to 0.4: n=3, mean confidence 0.35, accuracy 0.33</title></circle>
+<circle cx="214.6" cy="203.7" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.4 to 0.5: n=26, mean confidence 0.47, accuracy 0.42</title></circle>
+<circle cx="242.1" cy="173.2" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.5 to 0.6: n=118, mean confidence 0.55, accuracy 0.54</title></circle>
+<circle cx="274.1" cy="166.0" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.6 to 0.7: n=121, mean confidence 0.65, accuracy 0.57</title></circle>
+<circle cx="308.7" cy="122.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.7 to 0.8: n=150, mean confidence 0.75, accuracy 0.74</title></circle>
+<circle cx="341.3" cy="107.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.8 to 0.9: n=134, mean confidence 0.85, accuracy 0.80</title></circle>
+<circle cx="380.6" cy="73.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"><title>calibrated, confidence 0.9 to 1.0: n=248, mean confidence 0.97, accuracy 0.93</title></circle>
+<text x="400.0" y="85.0" font-size="12" fill="var(--text2)">raw</text>
+<text x="400.0" y="71.0" font-size="12" fill="var(--text2)">calibrated</text>
 </svg>
