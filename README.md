@@ -31,20 +31,20 @@ whole cases.
 |---|---|---|---|
 | Backbone, raw | 67.6% | 0.079 | 0.828 |
 | Backbone, calibrated | 76.1% (74.0 to 78.3) | 0.030 (0.020 to 0.049) | 0.541 (0.502 to 0.579) |
-| LoRA adapter (trained on the Mac) | **76.6%** (74.3 to 78.7) | **0.030** (0.017 to 0.049) | **0.532** (0.494 to 0.571) |
+| LoRA adapter (trained on the Mac) | **76.6%** (74.5 to 78.8) | **0.027** (0.015 to 0.046) | **0.531** (0.490 to 0.572) |
 
-The adapter trains the last 16 blocks at rank 8 on 765 of the 1,200 training
+The adapter trains the last 16 blocks at rank 8 on 900 of the 1,200 training
 cases (winner labels, 2 epochs, best checkpoint on 60 validation cases; 240
-more are held out for calibration). This run took about 3 hours on the Mac,
-averaging 6.5 s per step with validation and other jobs sharing the GPU; a
+more are held out for calibration). This run took about 4.5 hours on the Mac,
+averaging 9.1 s per step with validation and other jobs sharing the GPU; a
 bare training step measures 2.7 s per case. Peak memory is 17 GB. It lifts choice
-questions from 59.5% to 73.2% and score questions from 63.5% to 72.6%.
+questions from 59.5% to 72.0% and score questions from 63.5% to 74.3%.
 Calibration fits one Dirichlet map per question type on the backbone's
 answers to the 1,200 training cases. It does more than rescale confidence: it
 learns how the backbone misreads each option, so accuracy rises too. Score
 questions gain accuracy but keep about the same ECE (0.045 to 0.047). On the
-adapter, a held-out fit picks the identity map, because the adapter already
-comes out calibrated. Reports with reliability diagrams are in
+adapter, a held-out fit keeps the identity map for choice questions and makes
+small corrections to yes/no and score questions. Reports with reliability diagrams are in
 `benchmarks/results/`.
 
 Measured on a MacBook Pro M5 Pro 48 GB with Qwen3.8-27B at 4-bit, one
